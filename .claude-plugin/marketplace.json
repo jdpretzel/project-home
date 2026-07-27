@@ -1,0 +1,22 @@
+{
+  "name": "jdpretzel",
+  "owner": {
+    "name": "John Hetzel"
+  },
+  "description": "Project Home — a single-plugin marketplace, the way upstream mattpocock/skills runs one.",
+  "plugins": [
+    {
+      "name": "project-home",
+      "source": "./",
+      "description": "Everything a new project needs from day one — Matt Pocock's engineering skills (forked) plus model routing, lexicon, and Codex machinery.",
+      "category": "engineering",
+      "keywords": [
+        "engineering",
+        "skills",
+        "tdd",
+        "code-review",
+        "grilling"
+      ]
+    }
+  ]
+}
