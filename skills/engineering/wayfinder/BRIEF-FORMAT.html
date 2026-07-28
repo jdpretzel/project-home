@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brief #6 — The explanatory medium</title>
+<style>
+  :root{
+    color-scheme: light dark;
+
+    --fs-body: 18px;
+    --lh-body: 1.62;
+    --fs-claim: 24px;
+    --fs-frame: 20px;
+    --fs-title: 30px;
+    --fs-small: 16.5px;
+    --fs-mono: 12px;
+
+    --measure-body: 74ch;
+    --measure-claim: 56ch;
+    --measure-frame: 52ch;
+
+    --bg: #faf9f7;
+    --ink-1: #14171c;
+    --ink-2: #2c313a;
+    --ink-3: #5c6472;
+    --ink-4: #8b93a2;
+    /* structural labels carry the reading order — they are never the faintest ink.
+       --label 6.9:1 and --counter 4.6:1 on --bg; both clear AA at their sizes. */
+    --label: #4f5766;
+    --counter: #6a7280;
+    --surface: #f1efeb;
+    --rule: rgba(20,23,28,.14);
+    --rule-soft: rgba(20,23,28,.08);
+
+    --rec: #0a6444;
+    --rec-chip-bg: #0f2a1f;
+    --rec-chip-ink: #46c18a;
+
+    --alert: #8a5210;
+    --alert-chip-bg: #2b1d08;
+    --alert-chip-ink: #d9a24f;
+
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg: #0d0f12;
+      --ink-1: #edeff3;
+      --ink-2: #c5cad3;
+      --ink-3: #929aa8;
+      --ink-4: #69707e;
+      /* re-tuned for the dark ground, not inverted: 7.5:1 and 5.1:1 on --bg */
+      --label: #9aa2b0;
+      --counter: #7c8492;
+      --surface: #171a1f;
+      --rule: rgba(237,239,243,.16);
+      --rule-soft: rgba(237,239,243,.08);
+
+      --rec: #3cbb85;
+      --rec-chip-bg: #0c2419;
+      --rec-chip-ink: #45c78d;
+
+      --alert: #d9a24f;
+      --alert-chip-bg: #2a1d09;
+      --alert-chip-ink: #e0ac5c;
+    }
+  }
+
+  *{ box-sizing: border-box; }
+  html{ background: var(--bg); }
+  body{
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink-2);
+    font-family: var(--sans);
+    font-size: var(--fs-body);
+    line-height: var(--lh-body);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .wrap{ max-width: 920px; margin: 0 auto; padding: 72px 40px 96px; }
+
+  /* ---------- shared grid: gutter + content ---------- */
+  .row{
+    display: grid;
+    grid-template-columns: 132px minmax(0, 1fr);
+    column-gap: 32px;
+  }
+  .gutter{ padding-top: 4px; }
+  .col{ max-width: var(--measure-body); }
+
+  /* rules span wider than the content column: the horizon */
+  .horizon{
+    border: 0; border-top: 1px solid var(--rule);
+    margin: 0; height: 0;
+  }
+  .horizon-soft{
+    border: 0; border-top: 1px solid var(--rule-soft);
+    margin: 0; height: 0;
+  }
+
+  /* ---------- chrome type ---------- */
+  .mono{
+    font-family: var(--mono);
+    font-size: var(--fs-mono);
+    letter-spacing: .085em;
+    text-transform: uppercase;
+    color: var(--label);
+  }
+  .chip{
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: var(--fs-mono);
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    padding: 1px 3px;
+    border-radius: 1px;
+    background: var(--rec-chip-bg);
+    color: var(--rec-chip-ink);
+  }
+  .chip-alert{ background: var(--alert-chip-bg); color: var(--alert-chip-ink); }
+  .chip-quiet{
+    background: transparent;
+    color: var(--label);
+    padding: 1px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  a{ color: inherit; text-decoration-color: var(--counter); text-underline-offset: 3px; }
+  a:hover{ text-decoration-color: currentColor; }
+  code{ font-family: var(--mono); font-size: .88em; }
+
+  /* ---------- masthead ---------- */
+  .mast{ padding-bottom: 26px; }
+  .mast .kicker{ margin: 0 0 14px; }
+  h1{
+    margin: 0 0 14px;
+    font-size: var(--fs-title);
+    line-height: 1.22;
+    font-weight: 600;
+    letter-spacing: -.012em;
+    color: var(--ink-1);
+    max-width: 22ch;
+  }
+  .mast-meta{
+    display: flex; flex-wrap: wrap; align-items: baseline;
+    gap: 8px 18px;
+  }
+  .counter{
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: .04em;
+    color: var(--ink-3);
+  }
+  .counter b{ color: var(--ink-1); font-weight: 600; }
+
+  /* ---------- frame: caption to the title, not an article ---------- */
+  .frame{
+    margin: 30px 0 34px;
+    font-size: var(--fs-frame);
+    line-height: 1.5;
+    max-width: var(--measure-frame);
+    color: var(--ink-2);
+  }
+  .frame p{ margin: 0; }
+  .frame em{ font-style: normal; font-weight: 600; color: var(--ink-1); }
+
+  /* ---------- ask blocks ---------- */
+  .ask{ padding: 34px 0 6px; }
+  .ask-num{
+    font-weight: 300;
+    line-height: 1;
+    color: var(--counter);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.02em;
+  }
+  .num-xl{ font-size: 46px; }
+  .num-md{ font-size: 32px; }
+  .num-sm{ font-size: 20px; }
+  .ask-of{ margin-top: 6px; }
+  .tier{ margin-top: 12px; display: block; max-width: 14ch; line-height: 1.5; }
+
+  /* rail word — same slot as the ask counters, so the rail is never blank */
+  .rail-word{
+    font-size: 24px;
+    font-weight: 300;
+    line-height: 1;
+    letter-spacing: .10em;
+    text-transform: uppercase;
+    color: var(--rec);
+  }
+  .rail-word.neutral{ color: var(--counter); }
+
+  .q{
+    margin: 0 0 22px;
+    font-size: var(--fs-claim);
+    line-height: 1.36;
+    font-weight: 500;
+    letter-spacing: -.008em;
+    color: var(--ink-1);
+    max-width: var(--measure-claim);
+  }
+  .why{ margin: 0 0 22px; max-width: var(--measure-body); }
+  .why p{ margin: 0 0 .85em; }
+  .why p:last-child{ margin-bottom: 0; }
+  .why .lbl{ display: block; margin-bottom: 7px; }
+
+  /* ---------- the branch: two roads side by side, ABOVE the prose ----------
+     The outcome of each answer is the most decision-relevant line in an ask,
+     so it leads at body size and weight 600 — never demoted to a metadata row. */
+  .branch{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 28px;
+    margin: 0 0 26px;
+  }
+  .branch > div{ border-top: 1px solid var(--rule); padding-top: 12px; }
+  .branch .bk{ display: block; margin-bottom: 8px; }
+  .branch .bv{
+    margin: 0;
+    font-size: var(--fs-body);
+    line-height: 1.42;
+    font-weight: 600;
+    color: var(--ink-1);
+    max-width: 34ch;
+  }
+  .branch .bn{
+    margin: 8px 0 0;
+    font-size: var(--fs-small);
+    line-height: 1.45;
+    font-weight: 400;
+    color: var(--ink-2);
+    max-width: 38ch;
+  }
+
+  /* provenance mark — the corpus vocabulary, at point of use, costing four words
+     instead of a clause. Defined in the evidence block. */
+  .prov{
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--label);
+    white-space: nowrap;
+    margin-left: 5px;
+    text-decoration: none;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  /* ---------- gloss: a term of art defined by indent, weight and measure ----------
+     Transplanted from the claim/evidence reference: no box, no rule, no bullet.
+     The indent does the subordination; the narrower measure marks it as a
+     definition rather than the start of an argument. Used once, on the one
+     phrase the load-bearing ask turns on. */
+  .gloss{ margin: 0 0 28px; }
+  .gloss .gterm{
+    margin: 0 0 5px;
+    font-size: var(--fs-claim);
+    line-height: 1.3;
+    font-weight: 500;
+    letter-spacing: -.008em;
+    color: var(--ink-1);
+  }
+  .gloss .gattr{ display: block; margin-bottom: 20px; }
+  .gloss .gdef{
+    margin: 0 0 16px 56px;
+    max-width: 54ch;
+    font-size: var(--fs-small);
+    line-height: 1.5;
+    color: var(--ink-2);
+  }
+  .gloss .gdef:last-child{ margin-bottom: 0; }
+  .gloss .gdef .gk{ display: block; margin-bottom: 5px; }
+  .gloss .gdef b{ color: var(--ink-1); font-weight: 600; }
+
+  /* ---------- no default: a stamped block, not a silence line ----------
+     Ask 02 is the only ask with nothing to fall back on, so its default is
+     built as its own artefact rather than as the same rule-and-label the
+     other three use. */
+  .nodefault{
+    margin: 0 0 4px;
+    padding-top: 18px;
+    border-top: 2px solid var(--alert);
+    max-width: var(--measure-body);
+  }
+  .stamp-no{
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: var(--fs-mono);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--alert);
+    border: 1px solid var(--alert);
+    border-radius: 2px;
+    padding: 3px 7px;
+    margin-bottom: 14px;
+  }
+  .nodefault .nd{
+    margin: 0;
+    font-size: var(--fs-body);
+    font-weight: 700;
+    line-height: 1.45;
+    color: var(--alert);
+    max-width: 52ch;
+  }
+  .nodefault .ndn{
+    margin: 12px 0 0;
+    font-size: var(--fs-small);
+    line-height: 1.55;
+    color: var(--ink-2);
+    max-width: 64ch;
+  }
+
+  /* ---------- the ledger: all four asks on one surface ---------- */
+  .ledger{ margin: 0 0 30px; }
+  .ledger-label{ margin: 0 0 10px; }
+  .lg-head, .lg-row{
+    display: grid;
+    grid-template-columns: .38fr 1.45fr 1.2fr;
+    column-gap: 20px;
+  }
+  .lg-head{ padding-bottom: 8px; border-bottom: 1px solid var(--rule); }
+  .lg-row{
+    padding: 13px 0;
+    border-bottom: 1px solid var(--rule-soft);
+    font-size: var(--fs-small);
+    line-height: 1.45;
+    color: var(--ink-2);
+  }
+  .lg-row .lgn{
+    font-family: var(--mono); font-size: var(--fs-mono);
+    letter-spacing: .06em; text-transform: uppercase;
+    color: var(--label); padding-top: 3px;
+  }
+  .lg-row .lgl{ color: var(--rec); font-weight: 700; }
+  .lg-row .lgs{ color: var(--ink-1); font-weight: 600; }
+  .lg-row.nolean .lgl{ color: var(--ink-1); font-weight: 600; }
+  .lg-row.nolean .lgs{ color: var(--alert); }
+
+  /* ---------- tally: the one figure-scale event on the page ---------- */
+  .tally{
+    display: grid;
+    grid-template-columns: 88px minmax(0,1fr);
+    column-gap: 22px;
+    row-gap: 16px;
+    align-items: baseline;
+    margin: 0 0 30px;
+  }
+  .tally .tn{
+    font-size: 46px;
+    font-weight: 300;
+    line-height: 1;
+    letter-spacing: -.02em;
+    text-align: right;
+    color: var(--counter);
+    font-variant-numeric: tabular-nums;
+  }
+  .tally .tn.warn{ color: var(--alert); }
+  .tally .tt{ font-size: var(--fs-body); line-height: 1.45; color: var(--ink-2); max-width: 54ch; }
+  .tally .tt b{ color: var(--ink-1); font-weight: 600; }
+
+  /* ---------- specimen panel: the one filled surface on the page ----------
+     Its whole job is to settle WHICH artefact is under judgement, before any
+     argument about it. A tinted panel is used exactly once, here. */
+  .specimen{
+    background: var(--surface);
+    border: 1px solid var(--rule-soft);
+    border-radius: 2px;
+    padding: 20px 22px;
+    margin: 0 0 26px;
+    max-width: var(--measure-body);
+  }
+  .specimen .srow + .srow{
+    margin-top: 16px; padding-top: 16px;
+    border-top: 1px solid var(--rule);
+  }
+  .specimen .sk{ display: block; margin-bottom: 7px; }
+  .specimen .sv{
+    margin: 0;
+    font-size: var(--fs-body);
+    font-weight: 600;
+    color: var(--ink-1);
+    line-height: 1.45;
+  }
+  .specimen .sn{ margin: 7px 0 0; font-size: var(--fs-small); color: var(--ink-2); line-height: 1.5; }
+  .specimen .srow.alt .sv{ font-size: var(--fs-small); font-weight: 400; color: var(--ink-3); }
+  .specimen .srow.alt .sn{ color: var(--ink-3); }
+
+  /* ---------- dependency strip: what an ask hangs on, stated at the ask ---------- */
+  .dep{
+    display: grid;
+    grid-template-columns: 116px minmax(0,1fr);
+    column-gap: 18px;
+    margin: 0 0 24px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--rule);
+    font-size: var(--fs-small);
+    line-height: 1.5;
+    color: var(--ink-2);
+  }
+  .dep .dk{ padding-top: 3px; }
+  .dep b{ color: var(--ink-1); font-weight: 600; }
+  .dep.gate b{ color: var(--alert); }
+
+  /* ---------- the lean — ONE mechanism, used five times ----------
+     Left-aligned, flush to the column, marked by an accent rail + hue +
+     weight 700. Never centred: ragged multi-line text does not centre well,
+     and the page is otherwise strictly left-railed. Absence of the hue on
+     the rail is what marks a lean that does not exist. */
+  .lean-major{
+    margin: 30px 0 30px;
+    border-left: 2px solid var(--rec);
+    padding-left: 20px;
+  }
+  .lean-major .chip{ margin-bottom: 12px; }
+  .lgrade{ margin-left: 10px; }
+  .lean-major p{
+    margin: 0;
+    max-width: 50ch;
+    font-size: var(--fs-body);
+    font-weight: 700;
+    color: var(--rec);
+    line-height: 1.5;
+  }
+  .flip{
+    margin: 16px 0 0;
+    max-width: 58ch;
+    font-size: var(--fs-small);
+    color: var(--ink-3);
+  }
+  .flip b{ color: var(--ink-2); font-weight: 600; }
+
+  /* a lean that does not exist occupies the same slot — absence is a verdict */
+  .lean-major.lean-none{ border-left-color: var(--rule); }
+  .lean-major.lean-none p{ color: var(--ink-1); font-weight: 600; max-width: 50ch; }
+
+  /* silence — body size, high contrast, never small mono */
+  .silence{
+    margin: 0 0 4px;
+    padding-top: 16px;
+    border-top: 1px solid var(--rule);
+    max-width: var(--measure-body);
+  }
+  .silence .lbl{ display: block; margin-bottom: 6px; }
+  .silence p{
+    margin: 0;
+    font-size: var(--fs-body);
+    font-weight: 600;
+    color: var(--ink-1);
+    line-height: 1.5;
+  }
+  /* the gating ask's default gets a 2px rule and a stated downstream, matching
+     the weight ask 02's NO DEFAULT block carries. The confirmations keep the
+     thin rule and the one-line default — that difference is the tiering. */
+  .silence.major{ border-top-width: 2px; padding-top: 18px; }
+  .silence .snote{
+    margin: 11px 0 0;
+    font-size: var(--fs-small);
+    font-weight: 400;
+    color: var(--ink-2);
+    line-height: 1.55;
+    max-width: 64ch;
+  }
+  .silence .snote b{ color: var(--ink-1); font-weight: 600; }
+
+  /* ---------- the recommendation — a top-level landmark, sibling to the asks ---------- */
+  .recrow{ padding: 34px 0 6px; }
+  .commit{ margin: 0; }
+  .commit-head{ margin: 0 0 20px; }
+  /* the recommendation uses the identical lean mechanism, one size up */
+  .rec-line{
+    margin: 0 0 24px;
+    max-width: 48ch;
+    border-left: 2px solid var(--rec);
+    padding-left: 20px;
+  }
+  .rec-line .chip{ margin-bottom: 12px; }
+  .rec-line p{
+    margin: 0;
+    font-size: var(--fs-claim);
+    line-height: 1.34;
+    font-weight: 700;
+    color: var(--rec);
+  }
+  .commit p.body{ margin: 0 0 1em; }
+  .commit p.body:last-of-type{ margin-bottom: 0; }
+  .conf{
+    margin: 12px 0 0;
+    font-size: var(--fs-small);
+    color: var(--ink-3);
+    line-height: 1.5;
+  }
+  .conf b{ color: var(--ink-2); font-weight: 600; }
+
+  /* ---------- confidence, graded per claim and keyed to the ask it bears on ---------- */
+  .conf-table{ margin-top: 26px; }
+  .conf-label{ margin: 0 0 10px; }
+  .ct-head, .ct-row{
+    display: grid;
+    grid-template-columns: 1.9fr .75fr .55fr;
+    column-gap: 20px;
+  }
+  .ct-head{ padding-bottom: 8px; border-bottom: 1px solid var(--rule); }
+  .ct-row{
+    padding: 12px 0;
+    border-bottom: 1px solid var(--rule-soft);
+    font-size: var(--fs-small);
+    line-height: 1.45;
+    color: var(--ink-2);
+  }
+  .ct-row .claim{ color: var(--ink-1); }
+  .ct-row .grade{ font-weight: 700; color: var(--ink-1); }
+  .ct-row.med .grade{ color: var(--alert); }
+  .ct-row .bears{
+    font-family: var(--mono); font-size: var(--fs-mono);
+    letter-spacing: .06em; text-transform: uppercase;
+    color: var(--label); padding-top: 3px;
+  }
+
+  /* ---------- answering: the route, and what governs the horizon ---------- */
+  .answering{ padding: 30px 0 6px; }
+  .an{
+    display: grid;
+    grid-template-columns: 118px minmax(0,1fr);
+    column-gap: 20px;
+    padding: 15px 0;
+    border-top: 1px solid var(--rule-soft);
+    font-size: var(--fs-small);
+    line-height: 1.55;
+    color: var(--ink-2);
+    max-width: var(--measure-body);
+  }
+  .an:first-of-type{ border-top: 1px solid var(--rule); }
+  .an .ak{ padding-top: 3px; }
+  .an b{ color: var(--ink-1); font-weight: 600; }
+  .an .alert{ color: var(--alert); font-weight: 600; }
+
+  /* ---------- options on shared axes ---------- */
+  .opts{ margin-top: 30px; }
+  .opts-label{ margin: 0 0 10px; }
+  .opts-head, .opt{
+    display: grid;
+    grid-template-columns: 1.5fr 0.85fr 1.25fr 1.35fr;
+    column-gap: 22px;
+  }
+  .opts-head{ padding-bottom: 8px; border-bottom: 1px solid var(--rule); }
+  .opt{
+    padding: 14px 0;
+    border-bottom: 1px solid var(--rule-soft);
+    font-size: var(--fs-small);
+    line-height: 1.45;
+    color: var(--ink-2);
+  }
+  .opt .name{ color: var(--ink-1); font-weight: 500; }
+  .opt .name .id{ font-family: var(--mono); font-size: 12.5px; letter-spacing: .06em; color: var(--label); margin-right: 7px; }
+  .opt.rec .name{ color: var(--rec); font-weight: 700; }
+  .opt.rec .name .id{ color: var(--rec); }
+  .opt .name .chip{ display: inline-block; margin-top: 7px; }
+
+  /* ---------- compressed confirmations ---------- */
+  .confirms{ padding: 28px 0 4px; }
+  .confirms-head{ margin-bottom: 6px; }
+  .cf{
+    display: grid;
+    grid-template-columns: 1.3fr 1fr;
+    column-gap: 34px;
+    padding: 20px 0;
+    border-top: 1px solid var(--rule-soft);
+  }
+  .cf:first-of-type{ border-top: 1px solid var(--rule); }
+  .cf .cq{
+    margin: 0 0 8px;
+    font-size: var(--fs-body);
+    line-height: 1.45;
+    font-weight: 600;
+    color: var(--ink-1);
+  }
+  .cf .cwhy{ margin: 0; font-size: var(--fs-small); color: var(--ink-2); line-height: 1.5; }
+  .cf .cright > * + *{ margin-top: 16px; }
+  /* same lean mechanism as asks 01–02 and the recommendation, one size down */
+  .cf .cleanblock{ border-left: 2px solid var(--rec); padding-left: 14px; }
+  .cf .clean{
+    margin: 0;
+    font-size: var(--fs-small);
+    line-height: 1.5;
+    font-weight: 700;
+    color: var(--rec);
+  }
+  .cf .clbl{ display: block; margin-bottom: 4px; }
+  /* the confirmations tier reuses ask 01's lean structure — verdict, then a
+     smaller reason line — at the compressed spacing */
+  .cf .flip{ margin-top: 10px; max-width: none; }
+  .cf .cnum{
+    font-family: var(--mono); font-size: var(--fs-mono);
+    letter-spacing: .085em; color: var(--counter);
+    margin-right: 9px; font-weight: 400;
+  }
+  .cf .csil p{
+    margin: 0;
+    font-size: var(--fs-body);
+    font-weight: 600;
+    color: var(--ink-1);
+    line-height: 1.4;
+  }
+
+  /* ---------- settled ---------- */
+  .settled{ padding: 30px 0 4px; }
+  .st{
+    padding: 16px 0;
+    border-top: 1px solid var(--rule-soft);
+    max-width: var(--measure-body);
+  }
+  .st:first-of-type{ border-top: 1px solid var(--rule); }
+  .st h3{
+    margin: 0 0 4px;
+    font-size: var(--fs-small);
+    line-height: 1.45;
+    font-weight: 600;
+    color: var(--ink-2);
+  }
+  .st p{ margin: 0; font-size: var(--fs-small); color: var(--ink-3); line-height: 1.5; }
+  .st p b{ color: var(--ink-2); font-weight: 600; }
+  .st .stamp{ display: block; margin-bottom: 8px; }
+
+  /* ---------- evidence + colophon ---------- */
+  .evidence{ padding: 30px 0 6px; }
+  .evidence p{ margin: 0 0 10px; font-size: var(--fs-small); color: var(--ink-2); }
+  .vocab{ color: var(--ink-3); }
+  .vocab b{ color: var(--ink-2); font-weight: 600; }
+  .colophon{ padding: 26px 0 0; }
+  .colophon p{ margin: 0; }
+
+  .sec-label{ margin: 0; }
+
+  /* ---------- docked outline — the whole shape, and a way to jump ---------- */
+  html{ scroll-behavior: smooth; }
+  [id]{ scroll-margin-top: 26px; }
+
+  .outline{
+    position: fixed;
+    top: 78px;
+    left: max(10px, calc(50% - 600px));
+    width: 122px;
+    display: none;
+    z-index: 5;
+  }
+  .outline .oh{
+    display: block;
+    font-size: 11px;
+    padding-bottom: 8px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .outline a{
+    display: grid;
+    grid-template-columns: 34px minmax(0,1fr);
+    column-gap: 6px;
+    padding: 5px 0;
+    text-decoration: none;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    line-height: 1.34;
+    color: var(--label);
+  }
+  .outline a .on{ color: var(--counter); font-variant-numeric: tabular-nums; }
+  .outline a.o-rec .on{ color: var(--rec); }
+  .outline a.o-alert{ color: var(--alert); }
+  .outline a.o-alert .on{ color: var(--alert); }
+  .outline a:hover{ color: var(--ink-1); }
+  .outline a:hover .on{ color: var(--ink-1); }
+  .outline .odone{ opacity: .72; }
+  @media (min-width: 1200px){ .outline{ display: block; } }
+
+  @media (max-width: 880px){
+    .wrap{ padding: 48px 22px 72px; }
+    .row{ grid-template-columns: 1fr; row-gap: 14px; }
+    .gutter{ display: flex; align-items: baseline; gap: 14px; padding-top: 0; }
+    .ask-of{ margin-top: 0; }
+    .tier{ margin-top: 0; max-width: none; }
+    .num-xl{ font-size: 30px; }
+    .num-md{ font-size: 24px; }
+    .rail-word{ font-size: 20px; }
+    .opts-head{ display: none; }
+    .opt{ grid-template-columns: 1fr; row-gap: 6px; }
+    .opt > div:not(.name)::before{
+      content: attr(data-ax);
+      display: block;
+      font-family: var(--mono); font-size: 11px; letter-spacing: .085em;
+      text-transform: uppercase; color: var(--label); margin-bottom: 2px;
+    }
+    .cf{ grid-template-columns: 1fr; row-gap: 16px; }
+    .branch{ grid-template-columns: 1fr; row-gap: 18px; }
+    .branch .bv, .branch .bn{ max-width: none; }
+    .dep, .an{ grid-template-columns: 1fr; row-gap: 4px; }
+    .dep .dk, .an .ak{ padding-top: 0; }
+    .ct-head, .lg-head{ display: none; }
+    .ct-row, .lg-row{ grid-template-columns: 1fr; row-gap: 4px; }
+    .ct-row .bears, .lg-row .lgn{ padding-top: 0; }
+    .gloss .gdef{ margin-left: 22px; }
+    .tally{ grid-template-columns: 62px minmax(0,1fr); column-gap: 16px; }
+    .tally .tn{ font-size: 34px; }
+    h1{ font-size: 26px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===================== DOCKED OUTLINE ===================== -->
+<nav class="outline" aria-label="Brief outline">
+  <span class="mono oh">Brief #6</span>
+  <a href="#frame"><span class="on">·</span><span>Decision</span></a>
+  <a href="#recommendation" class="o-rec"><span class="on">Rec</span><span>Option set</span></a>
+  <a href="#ask-01"><span class="on">01</span><span>Load-bearing</span></a>
+  <a href="#ask-02" class="o-alert"><span class="on">02</span><span>No default</span></a>
+  <a href="#asks-0304"><span class="on">03–04</span><span>Confirms</span></a>
+  <a href="#answering"><span class="on">·</span><span>Answering</span></a>
+  <a href="#settled" class="odone"><span class="on">2</span><span>Settled</span></a>
+  <a href="#evidence" class="odone"><span class="on">·</span><span>Evidence</span></a>
+</nav>
+
+<div class="wrap">
+
+  <!-- ===================== MASTHEAD ===================== -->
+  <header class="row mast">
+    <div class="gutter"><span class="mono">Wayfinder</span></div>
+    <div class="col">
+      <p class="mono kicker">Brief #6 — decision ticket</p>
+      <h1>The explanatory medium</h1>
+      <div class="mast-meta">
+        <span class="chip chip-quiet">Awaiting operator ruling</span>
+        <span class="counter">brief 2026-07-26 · ballot 2026-07-27</span>
+        <span class="counter"><b>4</b> open — <b>1</b> gates the other <b>3</b> · <b>2</b> settled</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===================== FRAME ===================== -->
+  <div class="row" id="frame">
+    <div class="gutter"></div>
+    <div class="col">
+      <div class="frame">
+        <p>Wayfinder plans big work as decision tickets and posts each resolution as a
+        comment on the tracker. Briefs have outgrown that box: a brief this size gets
+        scanned, not read, and the one part that needs John — the ask — sits below
+        several hundred lines of argument. This ticket decides the <em>medium</em>:
+        whether a decision brief gets a designed shape that puts the ask above the
+        argument, or stays as it is.</p>
+      </div>
+    </div>
+  </div>
+
+  <hr class="horizon">
+
+  <!-- ===================== RECOMMENDATION + OPTION SET ===================== -->
+  <section class="row recrow" id="recommendation">
+    <div class="gutter">
+      <div class="rail-word">Rec</div>
+      <div class="mono ask-of">Option set</div>
+      <div class="mono tier">Proposed</div>
+    </div>
+    <div class="col">
+      <div class="commit">
+
+        <div class="rec-line">
+          <span class="chip">Recommended</span>
+          <p>Option C, scoped tightly.</p>
+        </div>
+
+        <p class="body">Ship one file, <code>skills/engineering/wayfinder/BRIEF-FORMAT.html</code>,
+        next to the skill that is its only consumer. Three things earn a place in it: the
+        shape (masthead, ask strip above everything, recommendation, options, evidence,
+        colophon); the house CSS inlined, because a strict content policy forbids a shared
+        stylesheet; and one authoring rule — write the working copy inside the repo and
+        check the render before publishing.</p>
+
+        <p class="body">Explicitly not a structural lint: a check that never fires is
+        dormant machinery. The other two shapes ruled out — a new skill, and a fork of the
+        existing status-page component — are options F and E below, priced on the same axes
+        as the rest rather than argued against twice.</p>
+
+        <div class="conf-table">
+          <p class="mono conf-label sec-label">Confidence, per claim</p>
+          <div class="ct-head">
+            <div class="mono">The claim</div>
+            <div class="mono">Confidence</div>
+            <div class="mono">Bears on</div>
+          </div>
+          <div class="ct-row">
+            <div class="claim">The shape — one designed page that puts the ask above the
+            argument.</div>
+            <div><span class="grade">High</span></div>
+            <div class="bears">Ask 01</div>
+          </div>
+          <div class="ct-row">
+            <div class="claim">The location — a sibling file next to <code>wayfinder</code>.</div>
+            <div><span class="grade">High</span></div>
+            <div class="bears">Ask 03</div>
+          </div>
+          <div class="ct-row med">
+            <div class="claim">That one template beats Markdown-plus-tokens.</div>
+            <div><span class="grade">Medium</span></div>
+            <div class="bears">Ask 02</div>
+          </div>
+          <p class="conf">The two <b>high</b> grades are grounded in patterns verified by
+          reading the repo — what <a href="#evidence">verified (experiment)</a> means below.
+          The <b>medium</b> one is a taste judgement, and <a href="#ask-02">ask 02</a> exists
+          precisely so it can be overruled in ten seconds.</p>
+        </div>
+
+        <div class="opts">
+          <p class="mono opts-label sec-label">Six options, compared on shared axes</p>
+          <div class="opts-head">
+            <div class="mono">Option</div>
+            <div class="mono">Sprawl</div>
+            <div class="mono">What it buys</div>
+            <div class="mono">What it costs</div>
+          </div>
+
+          <div class="opt">
+            <div class="name"><span class="id">A</span>Change nothing; the resolution
+            comment stays the medium.</div>
+            <div data-ax="Sprawl">Zero.</div>
+            <div data-ax="What it buys">No failure mode. Survives without a login.</div>
+            <div data-ax="What it costs">The brief is scanned, not read; options never sit
+            side by side; the ask sinks below the argument.</div>
+          </div>
+
+          <div class="opt" id="opt-b">
+            <div class="name"><span class="id">B</span>Publish the existing Markdown; no
+            template.</div>
+            <div data-ax="Sprawl">Zero files.</div>
+            <div data-ax="What it buys">The fallback, and the graceful degradation when the
+            renderer is unavailable.</div>
+            <div data-ax="What it costs">Delivers typography, not information design — the
+            ask still sits at the bottom.</div>
+          </div>
+
+          <div class="opt rec">
+            <div class="name"><span class="id">C</span>One sibling file.
+            <span class="chip">Recommended</span></div>
+            <div data-ax="Sprawl">One file, zero index surfaces.</div>
+            <div data-ax="What it buys">Total overridability, a real immediate consumer.</div>
+            <div data-ax="What it costs">Can drift from harness defaults.</div>
+          </div>
+
+          <div class="opt">
+            <div class="name"><span class="id">D</span>Design tokens only, no template.</div>
+            <div data-ax="Sprawl">Zero new files; one <code>CLAUDE.md</code> edit.</div>
+            <div data-ax="What it buys">On-brand published pages, by the supported route
+            — see <a href="#asks-0304">ask 04</a>.</div>
+            <div data-ax="What it costs">No shape and no option set, so no inversion. And it
+            belongs to ticket #12 — the open ticket going through this template and writing
+            down what each part of it holds — not to this one.</div>
+          </div>
+
+          <div class="opt">
+            <div class="name"><span class="id">E</span>Reuse the existing status-page
+            component.</div>
+            <div data-ax="Sprawl">One forked component.</div>
+            <div data-ax="What it buys">Starts from a component that already exists.</div>
+            <div data-ax="What it costs">Genre mismatch: a status page is browsed, a brief
+            is read once and decided.</div>
+          </div>
+
+          <div class="opt">
+            <div class="name"><span class="id">F</span>A new <code>decision-brief</code>
+            skill.</div>
+            <div data-ax="Sprawl">Five index surfaces.</div>
+            <div data-ax="What it buys">Nothing Option C does not already buy.</div>
+            <div data-ax="What it costs">Five maintenance surfaces for one format.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="horizon">
+
+  <!-- ===================== ASK 01 — LOAD-BEARING ===================== -->
+  <section class="row ask" id="ask-01">
+    <div class="gutter">
+      <div class="ask-num num-xl">01</div>
+      <div class="mono ask-of">of 4</div>
+      <div class="mono tier">Load-bearing</div>
+    </div>
+    <div class="col">
+
+      <div class="dep gate">
+        <span class="mono dk">Answer first</span>
+        <div>This ask gates the other three. <b>A “polish” answer closes the ticket and
+        voids asks 02, 03 and 04</b> — there is nothing left for them to decide.</div>
+      </div>
+
+      <h2 class="q">Which reading of “well-designed HTML” did you actually want? One
+      answer ships a template; the other closes this ticket with zero new files.</h2>
+
+      <div class="gloss">
+        <p class="gterm">“well-designed HTML”</p>
+        <span class="mono gattr">Your phrase, and the whole of this ask — it carries two
+        readings, and they do not point at the same outcome</span>
+
+        <div class="gdef">
+          <span class="mono gk">Reading one — the inversion</span>
+          <b>A structural claim.</b> The ask sits above the argument: the one part that
+          needs you comes before the several hundred lines that support it. This is the
+          half plain Markdown cannot deliver at any level of polish.
+        </div>
+        <div class="gdef">
+          <span class="mono gk">Reading two — the polish</span>
+          <b>A presentational claim.</b> The same argument in the same order, better set.
+          That is typography, not information design — and publishing the existing Markdown
+          already delivers it.
+        </div>
+      </div>
+
+      <div class="branch">
+        <div>
+          <span class="mono bk">If: reading one</span>
+          <p class="bv">A template earns its place.</p>
+          <p class="bn">The <a href="#recommendation">recommendation and option set</a>
+          stand, and asks 02, 03 and 04 stay live.</p>
+        </div>
+        <div>
+          <span class="mono bk">If: reading two</span>
+          <p class="bv"><a href="#opt-b">Option B</a> wins and this ticket closes.</p>
+          <p class="bn">Publish the existing Markdown, add zero files. Asks 02, 03 and 04
+          are void.</p>
+        </div>
+      </div>
+
+      <div class="why">
+        <span class="mono lbl">Why it matters</span>
+        <p>These point at different answers. If you wanted the structural inversion, a
+        template earns its place. If you mainly wanted it to read nicely, then publishing
+        the existing Markdown adds nothing and this ticket closes with zero new files.</p>
+      </div>
+
+      <div class="lean-major">
+        <span class="chip">Lean</span><span class="mono lgrade">Confidence high</span>
+        <p>The inversion is the point — it is the half that plain Markdown cannot deliver
+        at any level of polish.</p>
+        <p class="flip"><b>What would flip it:</b> if the inversion was not what was
+        wanted, Option B wins and the ticket closes with zero files.</p>
+      </div>
+
+      <div class="silence major">
+        <span class="mono lbl">If you say nothing</span>
+        <p>Adopts the lean: reading one is taken as your answer, and the template gets
+        built.</p>
+        <p class="snote">Concretely, silence here means <b>the recommendation and the
+        option set stand</b>, <code>BRIEF-FORMAT.html</code> ships as Option C describes
+        it, and <b>asks 02, 03 and 04 stay live</b> and still waiting on you. Nothing about
+        this ask closes the ticket — only a reading-two answer does that.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="horizon">
+
+  <!-- ===================== ASK 02 — TASTE ===================== -->
+  <section class="row ask" id="ask-02">
+    <div class="gutter">
+      <div class="ask-num num-md">02</div>
+      <div class="mono ask-of">of 4</div>
+      <div class="mono tier">Only you can answer</div>
+    </div>
+    <div class="col">
+
+      <div class="dep">
+        <span class="mono dk">Live only if</span>
+        <div>Ask 01 goes to the inversion. <b>A “polish” answer voids this ask</b> — there
+        would be no format to judge.</div>
+      </div>
+
+      <h2 class="q">Does the prototype look like something you want to read a governance
+      decision in?</h2>
+
+      <div class="specimen">
+        <div class="srow">
+          <span class="mono sk">The specimen · judge this one</span>
+          <p class="sv">This page, exactly as you have it open.</p>
+          <p class="sn">It is the format carrying real content from this ticket — masthead,
+          recommendation, option set, four asks, settled items, colophon. All of it is on
+          this page, and it opens from the repo with no login.</p>
+        </div>
+        <div class="srow alt">
+          <span class="mono sk">The other copy · not the specimen</span>
+          <p class="sv">The same file
+          <a href="https://claude.ai/code/artifact/13470d98-7784-4a24-97ce-cec7a6127ddd">published
+          on claude.ai</a>.</p>
+          <p class="sn">Identical content, and it needs a login to open — see the first
+          <a href="#settled-record">settled item</a>. Nothing to judge there that is not
+          already in front of you.</p>
+        </div>
+      </div>
+
+      <div class="branch">
+        <div>
+          <span class="mono bk">If: a yes</span>
+          <p class="bv"><a href="#recommendation">Option C</a> ships in this shape.</p>
+          <p class="bn">The medium-confidence claim holds and nothing is revised.</p>
+        </div>
+        <div>
+          <span class="mono bk">If: “no, but ___”</span>
+          <p class="bv">The shape is revised against the “but”.</p>
+          <p class="bn">The medium-confidence half of the recommendation falls before
+          anything ships. This is why a “no, but ___” is worth more than a yes.</p>
+        </div>
+      </div>
+
+      <div class="why">
+        <span class="mono lbl">Why it matters</span>
+        <p>This is the ask the recommendation is least confident about. Option C is high
+        confidence on shape and location, and medium on one thing only — that one template
+        beats Markdown-plus-tokens. That half is a taste judgement, and this ask exists so
+        it can be overruled in ten seconds. It is the one question a prototype exists to
+        ask.</p>
+      </div>
+
+      <div class="lean-major lean-none">
+        <span class="chip chip-quiet">No lean</span><span class="mono lgrade">Cannot be graded — your call</span>
+        <p>None, and none can be manufactured. This is your taste, and nothing substitutes
+        for it.</p>
+      </div>
+
+      <div class="nodefault">
+        <span class="stamp-no">No default available</span>
+        <p class="nd">Silence does not adopt. This ask stays open until you answer it.</p>
+        <p class="ndn">Asks 01, 03 and 04 each have a lean for silence to adopt; this one
+        has none, so there is nothing to fall back on and nothing is adopted on its behalf.
+        Nothing is read on any of the four until this ticket is ruled on — there is no
+        deadline, and no clock is running. So an unanswered 02 does not race ask 01’s
+        default; it simply leaves the shape unsettled while the file it would ship stays
+        authorised. <a href="#answering">How answering works</a>.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="horizon">
+
+  <!-- ===================== ASKS 03 + 04 — COMPRESSED ===================== -->
+  <section class="row confirms" id="asks-0304">
+    <div class="gutter">
+      <div class="ask-num num-sm">03–04</div>
+      <div class="mono ask-of">of 4</div>
+      <div class="mono tier">Leaned · reversible</div>
+    </div>
+    <div class="col">
+      <p class="mono confirms-head sec-label">Two confirmations</p>
+
+      <div class="dep">
+        <span class="mono dk">Live only if</span>
+        <div>Ask 01 goes to the inversion. <b>A “polish” answer voids both of these</b> —
+        with no file to ship, there is no location to choose and no template to hold
+        tokens.</div>
+      </div>
+
+      <div class="cf">
+        <div>
+          <p class="cq"><span class="cnum">03</span>Should <code>BRIEF-FORMAT.html</code> live next to
+          <code>wayfinder</code>, or somewhere neutral?</p>
+          <span class="mono clbl">Why it matters</span>
+          <p class="cwhy"><code>wayfinder</code> is its only consumer, and the repo already
+          uses the sibling-file pattern four times<a class="prov" href="#evidence">verified
+          (experiment)</a>. The neutral <code>.agents/</code> alternative is where the repo
+          keeps contracts belonging to no single skill; it costs the same one file and adds
+          the same zero index surfaces. Either way the same file ships saying the same
+          thing. The question is only where it lives — and moving it later is a
+          <code>git mv</code>.</p>
+        </div>
+        <div class="cright">
+          <div class="cleanblock">
+            <span class="mono clbl">Lean · low stakes, reversible</span>
+            <p class="clean">Next to <code>wayfinder</code>. It costs one file and zero
+            index surfaces: the repo’s five maintenance obligations are the five index
+            surfaces a <em>skill</em> must be registered in, and a sibling file is not a
+            skill.</p>
+          </div>
+          <div class="csil">
+            <span class="mono clbl">If you say nothing</span>
+            <p>Adopts the lean.</p>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="cf">
+        <div>
+          <p class="cq"><span class="cnum">04</span>Which ticket records the design tokens
+          in the template repo’s <code>CLAUDE.md</code> — this one, or #12?</p>
+          <span class="mono clbl">Why it matters</span>
+          <p class="cwhy">Recording design tokens in <code>CLAUDE.md</code> is the supported
+          way to keep published pages on-brand. Ticket #12 is the open ticket going through
+          this template and writing down what each part of it holds, so it would record
+          them anyway. The question is only which ticket owns the work.</p>
+        </div>
+        <div class="cright">
+          <div class="cleanblock">
+            <span class="mono clbl">Lean · low stakes, reversible</span>
+            <p class="clean">#12 records them. This ticket records none.</p>
+            <p class="flip"><b>Why #12:</b> it is already writing down what each part of
+            the template holds, and the token values are one more of those entries. This
+            ticket decides the medium, not what the template is filled with. Either way the
+            tokens get recorded — only the ticket number changes.</p>
+          </div>
+          <div class="csil">
+            <span class="mono clbl">If you say nothing</span>
+            <p>Adopts the lean.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="horizon">
+
+  <!-- ===================== ANSWERING — route and horizon ===================== -->
+  <section class="row answering" id="answering">
+    <div class="gutter">
+      <div class="rail-word neutral">How</div>
+      <div class="mono ask-of">Answering</div>
+      <div class="mono tier">Route · horizon</div>
+    </div>
+    <div class="col">
+
+      <div class="tally">
+        <div class="tn">3</div>
+        <div class="tt">of the four asks <b>resolve themselves</b> if you say nothing —
+        01, 03 and 04 adopt their leans.</div>
+        <div class="tn warn">1</div>
+        <div class="tt">does not. <b>Ask 02 has no lean</b>, so silence leaves it
+        open.</div>
+      </div>
+
+      <div class="ledger">
+        <p class="mono ledger-label sec-label">All four asks, their leans, and what silence does</p>
+        <div class="lg-head">
+          <div class="mono">Ask</div>
+          <div class="mono">The lean</div>
+          <div class="mono">If you say nothing</div>
+        </div>
+        <div class="lg-row">
+          <div class="lgn"><a href="#ask-01">01</a> · gating</div>
+          <div><span class="lgl">The inversion is the point.</span></div>
+          <div><span class="lgs">Adopts the lean.</span></div>
+        </div>
+        <div class="lg-row nolean">
+          <div class="lgn"><a href="#ask-02">02</a> · your call</div>
+          <div><span class="lgl">None. It is your taste.</span></div>
+          <div><span class="lgs">Nothing. Stays open until answered.</span></div>
+        </div>
+        <div class="lg-row">
+          <div class="lgn"><a href="#asks-0304">03</a> · reversible</div>
+          <div><span class="lgl">Next to <code>wayfinder</code>.</span></div>
+          <div><span class="lgs">Adopts the lean.</span></div>
+        </div>
+        <div class="lg-row">
+          <div class="lgn"><a href="#asks-0304">04</a> · reversible</div>
+          <div><span class="lgl">#12 records them; this ticket records none.</span></div>
+          <div><span class="lgs">Adopts the lean.</span></div>
+        </div>
+      </div>
+
+      <div class="an">
+        <span class="mono ak">The route</span>
+        <div>By operator ballot — the same route that settled the two items below. This
+        page is a view; the answers land on the record.</div>
+      </div>
+      <div class="an">
+        <span class="mono ak">The horizon</span>
+        <div><b>No deadline is set, and this brief does not set one.</b> The defaults hold
+        until this ticket is ruled on; the status line reads <i>awaiting operator ruling</i>
+        until then. Silence is read at the ruling, not at a date.</div>
+      </div>
+      <div class="an">
+        <span class="mono ak">The dates</span>
+        <div><code>brief 2026-07-26</code> — when this brief was written.
+        <code>ballot 2026-07-27</code> — the operator ballot that settled the two items
+        below. Neither is a deadline.</div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="horizon">
+
+  <!-- ===================== SETTLED ===================== -->
+  <section class="row settled" id="settled">
+    <div class="gutter">
+      <div class="ask-num num-sm">2</div>
+      <div class="mono tier">Settled</div>
+    </div>
+    <div class="col">
+      <div class="st" id="settled-record">
+        <span class="mono stamp">Operator ballot 2026-07-27</span>
+        <h3>Markdown stays the record of truth; the page is a regenerable view.</h3>
+        <p><b>Consequence:</b> a published page cannot link sibling briefs, needs a login to
+        read, and cannot be produced from CI contexts at all. The Markdown can do all three.</p>
+      </div>
+      <div class="st">
+        <span class="mono stamp">Operator ballot 2026-07-27</span>
+        <h3>The plan is MAX, so a public link is the only way to share a published page.</h3>
+        <p><b>Consequence:</b> the second-reader constraint is <b>live, not latent</b> — and
+        a further reason the record of truth stays in Markdown.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="horizon">
+
+  <!-- ===================== EVIDENCE ===================== -->
+  <section class="row evidence" id="evidence">
+    <div class="gutter"><span class="mono">Evidence</span></div>
+    <div class="col">
+      <p>Full record: <code>brief-6.md</code> — 32 numbered facts, F1–F32. Every count and
+      claim on this page resolves to one of them. It is deliberately not hyperlinked from
+      here: per the <a href="#settled-record">first settled item</a>, a published page
+      cannot link sibling briefs, and this page makes no external requests. Read the record
+      in the ticket thread, where it is the record of truth and this page is only a view.</p>
+      <p class="vocab">Each fact there carries one of three status marks:
+      <span><b>verified (experiment)</b> — established by running or reading the thing</span>
+      · <span><b>verified (docs)</b> — established from documentation</span> ·
+      <span><b>operator</b> — John’s ruling</span>.</p>
+    </div>
+  </section>
+
+  <hr class="horizon-soft">
+
+  <footer class="row colophon">
+    <div class="gutter"></div>
+    <div class="col">
+      <p class="mono">Brief #6 · Wayfinder · record of truth: brief-6.md · page is a view,
+      not the record</p>
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>
