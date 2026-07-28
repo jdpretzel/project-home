@@ -15,4 +15,5 @@ Reachable only when you type them (Claude Code: `disable-model-invocation: true`
 
 Model- or user-reachable (rich trigger phrasing so the model can reach for them).
 
+- **[decision-brief](./decision-brief/SKILL.md)** — Present multiple decisions, tradeoffs, or open asks to the user as one self-contained decision-brief HTML page, each ask carrying its recommended lean and the default that silence selects.
 - **[grilling](./grilling/SKILL.md)** — Interview the user relentlessly about a plan, decision, or idea until every branch of the decision tree is resolved.

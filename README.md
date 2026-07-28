@@ -52,6 +52,7 @@ when you type them; model-invoked skills the agent can also reach on its own.
 - **[code-review](skills/engineering/code-review/SKILL.md)** — Two-axis review (Standards + Spec) of the diff since a fixed point.
 - **[resolving-merge-conflicts](skills/engineering/resolving-merge-conflicts/SKILL.md)** — Work through an in-progress merge or rebase conflict hunk by hunk, by intent.
 - **[prototype](skills/engineering/prototype/SKILL.md)** — Build a throwaway prototype to answer a design question.
+- **[decision-brief](skills/productivity/decision-brief/SKILL.md)** — Present multiple decisions or tradeoffs to the user as one decision-brief HTML page.
 - **[grilling](skills/productivity/grilling/SKILL.md)** — Interview the user relentlessly about a plan, decision, or idea until every branch is resolved.
 
 ## Attribution
