@@ -23,7 +23,7 @@ The maintenance surface it created is easier to describe than to count. `setup-p
 
 Each skill owns the GitHub behaviour it uses. `wayfinder` carries its own sub-issue, dependency, frontier, claim, and resolution recipes; `to-spec`, `to-tickets`, `triage`, and `code-review` address the current repo through `gh` directly. `docs/agents/` ceases to exist as a convention.
 
-`/setup-project-home` survives, narrowed to config that genuinely varies per repo: whether the repo uses `/triage` (and what its real label strings are), and where the domain docs live when they aren't where skills already look. On a repo with defaults everywhere it writes nothing.
+`/setup-project-home` survives, narrowed to config that genuinely varies per repo: whether the repo uses `/triage` (and what its real label strings are), and where the domain docs live when they aren't where skills already look. Only true defaults go unwritten: the triage answer is always recorded, **including a "no"**, so that absence keeps meaning *setup never ran* rather than *this repo doesn't triage* — the same silent-fallback failure described above, arriving through the new design instead of the old one. Domain-doc defaults are safe to leave unwritten because consumers carry the same defaults; a missing triage answer is not, because the two branches behave differently.
 
 ## Failure posture, and the distinction that matters
 

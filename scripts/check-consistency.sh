@@ -81,7 +81,8 @@ assert_once() { # file, anchor, description
 assert_once "$setup" 'gh auth status' "preflight auth check"
 assert_once "$setup" 'hasIssuesEnabled' "preflight Issues-capability check"
 assert_once "$setup" 'stop and say which' "GitHub loud stop"
-assert_once "$setup" 'No labels, no block' "triage-off branch"
+assert_once "$setup" 'does not triage: publish issues without triage labels' \
+  "triage-off answer recorded, not left absent"
 assert_once "$setup" 'Reconcile them against' "triage-on branch"
 assert_once "$way" 'stop and say which one' "GitHub loud stop"
 assert_once "$way" '**No sub-issues**' "task-list degradation"
@@ -89,6 +90,10 @@ assert_once "$way" '**No dependencies**' "Blocked-by degradation"
 for s in to-spec to-tickets; do
   assert_once "skills/engineering/$s/SKILL.md" \
     "don't fail the publish over a label" "no-triage label branch"
+  # The third state, and the reason the recorded "no" above is written at all:
+  # nothing recorded means unasked, so publishing unlabelled is a guess.
+  assert_once "skills/engineering/$s/SKILL.md" \
+    'the triage question is unanswered' "unconfigured-repo stop"
 done
 
 if [ "$fail" -eq 0 ]; then

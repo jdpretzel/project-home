@@ -24,7 +24,7 @@ Reach for it once you have an agreed plan or a written spec and you want it spli
 
 ## Prerequisites
 
-A GitHub repo you can reach — the tickets are published as issues on it. If your repo triages, it applies your `ready-for-agent` label as it publishes, so [setup-project-home](https://aihero.dev/skills-setup-project-home) needs to have recorded your label strings first; if your repo doesn't triage, the tickets publish unlabelled.
+A GitHub repo you can reach — the tickets are published as issues on it — and a [setup-project-home](https://aihero.dev/skills-setup-project-home) run on that repo. If you triage, setup is where your `ready-for-agent` label string comes from and the tickets get it as they publish; if you don't, setup records that too and the tickets publish unlabelled. With neither recorded, `to-tickets` stops before creating anything and names the setup skill, rather than reading *never set up* as *doesn't triage* and stranding a whole set of tickets outside your triage queue.
 
 ## The blocking edges are the point
 

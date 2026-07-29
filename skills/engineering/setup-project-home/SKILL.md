@@ -10,9 +10,9 @@ Record the few things about *this* repo that the engineering skills can't work o
 
 - **GitHub access** — that the skills can actually reach this repo's issues
 - **Domain doc paths** — only where `CONTEXT.md` or the ADRs aren't where skills already look
-- **Triage labels** — only where this repo actually uses `/triage`
+- **Triage labels** — the real label strings where this repo uses `/triage`, and the recorded fact that it doesn't where it doesn't
 
-Everything else the skills carry themselves. **GitHub is the supported tracker**, so there is no tracker to choose, and no generic rules or command recipes get copied into your repo. On a repo with defaults everywhere, this skill correctly writes nothing at all.
+Everything else the skills carry themselves. **GitHub is the supported tracker**, so there is no tracker to choose, and no generic rules or command recipes get copied into your repo. On a repo with defaults everywhere, the one thing this skill still records is the answer to the triage question — and it records it whether that answer was yes or no, because absence has to keep meaning *setup never ran*. A recorded "no" is what stops every consumer from reading an unconfigured repo as one that doesn't triage.
 
 This is a prompt-driven skill, not a deterministic script. Explore, present what you found, confirm with the user, then write.
 
@@ -51,7 +51,11 @@ Summarise what's present and what's missing, then take the two sections in order
 
 Ask about *use*, never about whether the skill is installed: `triage` ships in this same plugin, so "installed" is true in every repo and gates nothing.
 
-On **no** — write nothing. No labels, no block. A repo that doesn't triage doesn't need a label vocabulary, and manufacturing one only leaves config to go stale.
+On **no** — create no labels, but still record the answer, as one line in a fixed shape:
+
+> This repo does not triage: publish issues without triage labels.
+
+Recording a "no" looks redundant and isn't: a repo that was asked and answered no has to stay distinguishable from a repo nobody ever asked. Leave it unwritten and every consumer reads *unconfigured* as *triage-off*, publishing unlabelled into a repo that may well triage — the silent fallback this whole design exists to kill, arriving by a new route. The shape is fixed for the same reason the mapping line below is: a re-run with an unchanged answer regenerates identical text rather than a fresh paraphrase. What "no" does still buy is no label vocabulary — nothing manufactured, nothing to go stale.
 
 On **yes** — the five canonical roles are `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. Reconcile them against what `gh label list` returned:
 
@@ -77,27 +81,27 @@ Offer the multi-context layout only when exploration found monorepo signals.
 
 ### 4. Confirm
 
-Show the exact block about to be written and the file it lands in. Where a block already exists, show it as a **diff** against what's there rather than as a fresh insertion, so a re-run makes its changes obvious. Let the user edit before anything is written.
+Show the exact block about to be written and the file it lands in — files, plural, where step 5 resolves to two independent root instruction files. Where a block already exists, show it as a **diff** against what's there rather than as a fresh insertion, so a re-run makes its changes obvious. Let the user edit before anything is written.
 
-Where both sections came back "nothing to record", say so and write nothing. That is a successful run, not a failure.
+Section B can come back with nothing to record; Section A never does, because "no" is itself the answer it records. So there is always a block to confirm, even when it's a heading and one line — say as much rather than dressing a minimal block up as a bigger result.
 
 ### 5. Write
 
 **Pick the file:**
 
-- If `CLAUDE.md` exists, edit it. Else if `AGENTS.md` exists, edit it.
-- If neither exists, ask which to create — don't pick for them.
-- Never create `AGENTS.md` when `CLAUDE.md` already exists, or vice versa.
 - **Where one is a symlink to the other, edit the target once.** They are the same file; writing "both" writes it twice and can double the block.
+- **Where `CLAUDE.md` and `AGENTS.md` both exist as independent files, write the block to both, identically.** An agent whose harness reads only `AGENTS.md` never sees `CLAUDE.md`, so a single-file write is config that half the agents working this repo cannot find — they re-run setup, or act on the defaults the user just overruled.
+- If only one exists, edit it. If neither exists, ask which to create — don't pick for them.
+- Never create `AGENTS.md` when `CLAUDE.md` already exists, or vice versa. A second root instruction file is a divergence waiting to happen, and this skill shouldn't be what starts one.
 
-The block, carrying only the sub-blocks that earned a place:
+The block — `### Triage labels` always, `### Domain docs` only where it earned a place:
 
 ```markdown
 ## Agent skills
 
 ### Triage labels
 
-[the mapping in one line, and whether external PRs are in scope]
+[the mapping in one line and whether external PRs are in scope, or the does-not-triage line]
 
 ### Domain docs
 
@@ -107,11 +111,13 @@ The block, carrying only the sub-blocks that earned a place:
 Three rules make re-runs safe:
 
 - An existing `## Agent skills` section is **updated in place**, sub-block by sub-block. Never append a second one.
-- A sub-block whose section answered "no" or "nothing nonstandard" is **omitted** — and **removed** if an earlier run wrote one.
+- A sub-block whose section answered "nothing nonstandard" is **omitted** — and **removed** if an earlier run wrote one. That is **Domain docs** only: under `### Triage labels`, "no" is a recorded answer rather than an absence, so that sub-block is written either way and never removed.
 - Everything outside the sub-blocks this skill owns is left exactly as found. User edits to surrounding sections survive a re-run untouched. Inside a sub-block the recorded **answers** are authoritative and get rewritten from the fixed shape above — so if a hand-edited line disagrees with them, show that as the diff and let the user decide, rather than silently preserving or silently overwriting it.
 
-If both sub-blocks are omitted, don't write an empty `## Agent skills` heading — and remove one a previous run left behind.
+All three apply **per file**: with two independent root files, each is brought into line with the recorded answers on its own. Where their owned blocks have drifted apart, the recorded answers are still what wins — show the drift as a diff and let the user decide, exactly as with a hand-edited line.
+
+`### Triage labels` is always present, so an empty `## Agent skills` heading is never a correct result — remove one a previous run left behind.
 
 ### 6. Done
 
-Say what was written, or that nothing needed writing. Name which engineering skills read it. Mention that these are ordinary lines in the root instructions, editable by hand — re-run this skill only to start over or to change one of the answers.
+Say what was written and to which file or files — there is always at least the triage line. Name which engineering skills read it. Mention that these are ordinary lines in the root instructions, editable by hand — re-run this skill only to start over or to change one of the answers. Where you wrote two files, say that both now carry the same block and that hand-editing one alone will make them disagree.

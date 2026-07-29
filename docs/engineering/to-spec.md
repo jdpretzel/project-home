@@ -24,7 +24,7 @@ Reach for it once a change has been talked through and the domain language is se
 
 ## Prerequisites
 
-A GitHub repo you can reach — the spec is published as an issue on it. If your repo triages, it applies your `ready-for-agent` label itself, so [setup-project-home](https://aihero.dev/skills-setup-project-home) needs to have recorded your label strings first; if your repo doesn't triage, it publishes unlabelled and tells you. No separate triage pass is needed either way.
+A GitHub repo you can reach — the spec is published as an issue on it — and a [setup-project-home](https://aihero.dev/skills-setup-project-home) run on that repo. If you triage, setup is where your `ready-for-agent` label string comes from and `to-spec` applies it itself, so no separate triage pass is needed; if you don't, setup records that too and `to-spec` publishes unlabelled and tells you. What it won't do is read *never set up* as *doesn't triage*: with neither recorded it stops and names the setup skill, because publishing unlabelled into a repo that does triage drops the spec outside the queue meant to pick it up.
 
 ## What the spec includes
 
@@ -47,6 +47,7 @@ That matters for agentic development: a good interface gives tests something dur
 - It starts writing the spec instead of asking you a fresh round of questions.
 - It checks the seams with you before writing, and proposes as few as possible.
 - The spec comes back in your project's domain vocabulary, not generic boilerplate.
+- On a repo where setup has never run, it stops and names `/setup-project-home` rather than publishing an unlabelled issue.
 
 ## Where it fits
 

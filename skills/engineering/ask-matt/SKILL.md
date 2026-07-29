@@ -76,4 +76,4 @@ Off the main flow entirely.
 
 ## Precondition
 
-**`/setup-project-home`** — run before your first engineering flow. It verifies this is a GitHub repo you can reach, records where your domain docs and ADRs live if they aren't in the default places, and sets up triage labels if the repo uses `/triage`. GitHub is the supported tracker; there is no other.
+**`/setup-project-home`** — run before your first engineering flow. It verifies this is a GitHub repo you can reach, records where your domain docs and ADRs live if they aren't in the default places, and records whether the repo triages — the label strings if yes, the fact itself if no; `/to-spec` and `/to-tickets` stop rather than publish until that answer exists. GitHub is the supported tracker; there is no other.

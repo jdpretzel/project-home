@@ -76,12 +76,17 @@ When PRs are in scope, include external PRs in these buckets and tag each line `
 ```bash
 gh api repos/{owner}/{repo}/pulls --paginate \
   --jq '.[] | select(.author_association | IN("OWNER","MEMBER","COLLABORATOR") | not)
-        | {number, title, author: .user.login, association: .author_association}'
+        | {number, title, author: .user.login, association: .author_association,
+           labels: [.labels[].name], updated_at}'
 ```
 
 External is defined by **exclusion** — anything that is not `OWNER`, `MEMBER`, or `COLLABORATOR` — because a collaborator's in-flight PR is not triage work. Excluding is the right direction: GitHub's enum also carries `CONTRIBUTOR`, `FIRST_TIME_CONTRIBUTOR`, `FIRST_TIMER`, `MANNEQUIN`, and `NONE`, and an inclusion list silently drops anyone whose association GitHub adds later.
 
-This filter is discovery-only; an explicitly named PR is always triaged regardless of author.
+Keep it a **projection** — the buckets need label state and a timestamp, not whole pull request objects. All three buckets are decided by labels (none at all, `needs-triage`, `needs-info`), so a PR stripped of its label names can't be bucketed and a PR already sitting at `ready-for-human` can't be told apart from a new request; `updated_at` is what orders the list oldest-first and separates stale from active. Bodies, diffs, and comments are gathered later, per item, when the maintainer picks one.
+
+The `needs-info` bucket costs one extra call per candidate, because reporter activity isn't in that list payload — `gh issue list --json ...,comments` hands you the comments for issues, the pulls list doesn't. For a PR, the conversation timeline is served by the **issues** endpoint under the same number: `gh api repos/{owner}/{repo}/issues/{number}/comments`. `gh api repos/{owner}/{repo}/pulls/{number}/comments` is a different thing — inline review comments on the diff — and a reporter's reply can land in either, so read the conversation comments and, where the PR has review threads, those too, and compare their timestamps against the last triage notes. Spend these calls **only** on the PRs whose labels already put them in the `needs-info` bucket; fetching comments for every PR in the list turns cheap discovery into one request per open PR.
+
+The association filter is discovery-only; an explicitly named PR is always triaged regardless of author.
 
 Show counts and a one-line summary per item. Let the maintainer pick.
 

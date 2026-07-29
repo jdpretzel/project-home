@@ -9,6 +9,8 @@ Actively build and sharpen the project's domain model as you design. This is the
 
 ## File structure
 
+**Check the recorded paths before assuming the layouts below.** Read the root instructions (`CLAUDE.md`/`AGENTS.md`) for an `## Agent skills` → `### Domain docs` block. Any path it records overrides the default below — for reading *and* for writing. `/setup-project-home` writes that block only where a repo differs from these defaults, so its presence means the defaults are wrong here. Writing an ADR to `docs/adr/` in a repo that keeps them in, say, `.agents/adr/` starts a second ADR sequence with its own `0001-`, and every reader of the recorded location — the next `/grill-with-docs` session, `/improve-codebase-architecture` — never sees the decision you just recorded.
+
 Most repos have a single context:
 
 ```
@@ -37,7 +39,7 @@ If a `CONTEXT-MAP.md` exists at the root, the repo has multiple contexts. The ma
 │       └── docs/adr/
 ```
 
-Create files lazily — only when you have something to write. If no `CONTEXT.md` exists, create one when the first term is resolved. If no `docs/adr/` exists, create it when the first ADR is needed.
+Create files lazily — only when you have something to write. If no `CONTEXT.md` exists, create one when the first term is resolved. If no ADR directory exists, create it when the first ADR is needed — at the recorded location where one is recorded, `docs/adr/` otherwise.
 
 ## During the session
 

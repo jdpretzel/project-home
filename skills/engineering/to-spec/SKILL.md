@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 This skill takes the current conversation context and codebase understanding and produces a spec (you may know this document as a PRD). Do NOT interview the user — just synthesize what you already know.
 
-The spec is published as a GitHub issue on this repo. If this repo triages, its label vocabulary should have been provided to you — run `/setup-project-home` if not. A repo that doesn't triage is a supported case, not a misconfiguration.
+The spec is published as a GitHub issue on this repo. If this repo triages, its label vocabulary should have been provided to you — run `/setup-project-home` if not. Read the root instructions (`CLAUDE.md` / `AGENTS.md`) for **three** states rather than two: a recorded label vocabulary, an explicit line saying this repo doesn't triage, or neither. A repo that doesn't triage is a supported case, not a misconfiguration — but that is the recorded "no", not the silence. Silence means setup never ran, so the question is unanswered rather than answered no; see step 3.
 
 ## Process
 
@@ -16,7 +16,13 @@ The spec is published as a GitHub issue on this repo. If this repo triages, its 
 
 Check with the user that these seams match their expectations.
 
-3. Write the spec using the template below, then publish it as a GitHub issue on this repo (`gh issue create`). Where this repo has a triage vocabulary, apply its `ready-for-agent` label - no need for additional triage. Where it doesn't triage, publish without a label and say so; don't fail the publish over a label that was never meant to exist, and don't create one. If there is no GitHub remote, `gh` is unauthenticated, or the repo has Issues disabled, stop and say which.
+3. Write the spec using the template below, then publish it as a GitHub issue on this repo (`gh issue create`). If there is no GitHub remote, `gh` is unauthenticated, or the repo has Issues disabled, stop and say which.
+
+   The label follows the three states, and reading two states where there are three is the whole trap:
+
+   - **A triage vocabulary is recorded** → apply its `ready-for-agent` label; no need for additional triage.
+   - **A does-not-triage line is recorded** → publish without a label and say so; don't fail the publish over a label that was never meant to exist, and don't create one.
+   - **Neither is recorded** → the triage question is unanswered, not answered no. Stop before publishing and say `/setup-project-home` hasn't been run on this repo. Publishing unlabelled here is a guess dressed as a supported case: on a repo that does triage, the spec lands outside the queue that was supposed to pick it up, and nothing about the issue shows that anything went wrong.
 
 <spec-template>
 

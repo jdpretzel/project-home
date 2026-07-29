@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Break a plan, spec, or conversation into a set of **tickets** — tracer-bullet vertical slices, each declaring the tickets that **block** it.
 
-Tickets are published as GitHub issues on this repo. If this repo triages, its label vocabulary should have been provided to you — run `/setup-project-home` if not. A repo that doesn't triage is a supported case, not a misconfiguration.
+Tickets are published as GitHub issues on this repo. If this repo triages, its label vocabulary should have been provided to you — run `/setup-project-home` if not. Read the root instructions (`CLAUDE.md` / `AGENTS.md`) for **three** states rather than two: a recorded label vocabulary, an explicit line saying this repo doesn't triage, or neither. A repo that doesn't triage is a supported case, not a misconfiguration — but that is the recorded "no", not the silence. Silence means setup never ran, so the question is unanswered rather than answered no; see step 5.
 
 ## Process
 
@@ -67,7 +67,11 @@ If any fails, **stop and say which**. Don't publish the tickets anywhere else in
 
 Then publish one issue per ticket **in dependency order** (blockers first), so each ticket's blocking edges can reference real issue numbers.
 
-Where this repo has a triage vocabulary, apply its `ready-for-agent` label unless instructed otherwise — the tickets are agent-grabbable by construction. Where it doesn't triage, publish without a label and say so; don't fail the publish over a label that was never meant to exist, and don't create one.
+The label follows the three states, and reading two states where there are three is the whole trap:
+
+- **A triage vocabulary is recorded** → apply its `ready-for-agent` label unless instructed otherwise — the tickets are agent-grabbable by construction.
+- **A does-not-triage line is recorded** → publish without a label and say so; don't fail the publish over a label that was never meant to exist, and don't create one.
+- **Neither is recorded** → the triage question is unanswered, not answered no. Stop before publishing and say `/setup-project-home` hasn't been run on this repo — and check it alongside the three preflight checks above, before creating anything, because a set half-published unlabelled is worse than one never started. On a repo that does triage, unlabelled tickets sit outside the queue meant to pick them up, and nothing about them shows anything went wrong.
 
 **Wiring the blocking edges.** Prefer GitHub's native issue dependencies, which render the frontier visually in GitHub's own UI:
 
