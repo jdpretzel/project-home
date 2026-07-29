@@ -1,10 +1,10 @@
 ---
 name: wayfinder
-description: Plan a huge chunk of work — more than one agent session can hold — as a shared map of decision tickets on your issue tracker, and resolve them one at a time until the way to the destination is clear.
+description: Plan a huge chunk of work — more than one agent session can hold — as a shared map of decision tickets on GitHub, and resolve them one at a time until the way to the destination is clear.
 disable-model-invocation: true
 ---
 
-A loose idea has arrived — too big for one agent session, and wrapped in fog: the way from here to the **destination** isn't visible yet. Wayfinding is about finding that way, not charging at the destination. This skill charts the way as a **shared map** on the repo's issue tracker, then works its **decision tickets** — questions whose resolution is a decision, not slices of a build to execute — one at a time until the route is clear.
+A loose idea has arrived — too big for one agent session, and wrapped in fog: the way from here to the **destination** isn't visible yet. Wayfinding is about finding that way, not charging at the destination. This skill charts the way as a **shared map** on the repo's GitHub issues, then works its **decision tickets** — questions whose resolution is a decision, not slices of a build to execute — one at a time until the route is clear.
 
 The destination varies per effort, and naming it is the first act of charting — it shapes every ticket. It might be a spec to hand off and iterate on, a decision to lock before planning starts, or a change made in place like a data-structure migration. The map is domain-agnostic — engineering work, course content, whatever fits the shape.
 
@@ -18,11 +18,11 @@ Every map and ticket is an issue, so it has a **name** — its title. In everyth
 
 ## The Map
 
-The map is a single issue on this repo's issue tracker, labelled `wayfinder:map` — the canonical artifact. Its tickets are child issues of the map.
+The map is a single GitHub issue on this repo, labelled `wayfinder:map` — the canonical artifact. Its tickets are child issues of the map.
 
 The map is an **index**, not a store. It lists the decisions made and points at the tickets that hold their detail; a decision lives in exactly one place — its ticket — so the map never restates it, only gists it and links.
 
-**Where the map, its child tickets, blocking, and frontier queries physically live is tracker-specific.** The issue tracker should have been provided to you — run `/setup-project-home` if not. Consult the tracker doc's "Wayfinding operations" section for how _this_ repo expresses them. If no tracker has been provided, default to the local-markdown tracker.
+The map, its child tickets, blocking, and frontier queries all live as **GitHub issues on this repo** — see [GitHub operations](#github-operations) for the exact recipes. If there is no GitHub remote, `gh` is unauthenticated, or the repo has Issues disabled, **stop and say which one**. Never fall back to another tracker or to local files.
 
 ### The map body
 
@@ -54,7 +54,7 @@ The whole map at low resolution, loaded once per session. Open tickets are **not
 
 ### Tickets
 
-Each ticket is a **child issue** of the map; the tracker's issue id is its identity. Its body is the question, sized to one 100K token agent session:
+Each ticket is a **child issue** of the map; its issue number is its identity. Its body is the question, sized to one 100K token agent session:
 
 ```markdown
 ## Question
@@ -66,7 +66,7 @@ Each ticket carries a `wayfinder:<type>` label — one of `research`, `prototype
 
 A session **claims** a ticket by assigning it to the dev driving the map, **first**, before any work, so concurrent sessions skip it. That assignee _is_ the claim: an open, unassigned ticket is unclaimed.
 
-Blocking uses the tracker's **native** dependency relationship — essential because it renders the frontier _visually_ in the tracker's own UI, so the human sees what's takeable without opening the map. Only a tracker that lacks native blocking falls back to a body convention. A ticket is **unblocked** when every ticket blocking it is closed; the **frontier** is the open, unblocked, unclaimed children — the edge of the known.
+Blocking uses GitHub's **native issue dependencies** — essential because it renders the frontier _visually_ in GitHub's own UI, so the human sees what's takeable without opening the map. Where the repo doesn't have dependencies available, fall back to the `Blocked by: #<n>` body convention (see [GitHub operations](#github-operations)) — a weaker representation of the same thing, not a different tracker. A ticket is **unblocked** when every ticket blocking it is closed; the **frontier** is the open, unblocked, unclaimed children — the edge of the known.
 
 The answer isn't part of the body — it's recorded on resolution (see [Work through the map](#work-through-the-map)). Assets created while resolving a ticket are linked from the issue, not pasted in.
 
@@ -125,4 +125,26 @@ User invokes with a map (URL or number). A ticket is **optional** — without on
 4. Record the resolution: post the answer as a **resolution comment**, **close** the issue, and **append a context pointer** to the map's Decisions-so-far.
 5. Add newly-surfaced tickets (create-then-wire); graduate any fog the answer has made specifiable, clearing each graduated patch from **Not yet specified** so it lives only as its new ticket. If the answer reveals a ticket — this one or another — sits beyond the destination, **rule it out of scope** rather than resolving it on the route. If the decision invalidates other parts of the map, update or delete those tickets.
 
-The user may run unblocked tickets in parallel, so expect other sessions to be editing the tracker concurrently.
+The user may run unblocked tickets in parallel, so expect other sessions to be editing the map's issues concurrently.
+
+## GitHub operations
+
+Every map, ticket, and query above is a GitHub issue on the repo this clone points at — `gh` infers it automatically inside a clone (`gh repo view --json nameWithOwner` when you need it named).
+
+**Preflight, and it is a hard stop.** Before the first write, confirm there is a GitHub remote, that `gh auth status` succeeds, and that the repo has Issues enabled. If any one is missing, say which and stop. Do not write the map to local files, and do not reach for another tracker — an unconfigured repo is an error to surface, not a shape to guess at.
+
+- **Map**: a single issue labelled `wayfinder:map`, holding the Destination / Notes / Decisions-so-far / fog body. `gh issue create --label wayfinder:map`.
+- **Child ticket**: an issue linked to the map as a GitHub **sub-issue** (`gh api` on the sub-issues endpoint). Labels: `wayfinder:<type>` — `research`, `prototype`, `grilling`, `task`. Once claimed, assigned to the driving dev.
+- **Blocking**: add an edge with `gh api --method POST repos/<owner>/<repo>/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>`, where `<blocker-db-id>` is the blocker's numeric **database id** (`gh api repos/<owner>/<repo>/issues/<n> --jq .id`) — _not_ the `#number` and _not_ the `node_id`. GitHub then reports `issue_dependencies_summary.blocked_by`, counting open blockers only, which is the live gate.
+- **Frontier query**: list the map's open children (`gh issue list --state open`, scoped to the map's sub-issues or task list), drop any with an open blocker (`issue_dependencies_summary.blocked_by > 0`, or an open issue named in the `Blocked by` line) or an assignee; first in map order wins.
+- **Claim**: `gh issue edit <n> --add-assignee @me` — the session's first write.
+- **Resolve**: `gh issue comment <n> --body "<answer>"`, then `gh issue close <n>`, then append a context pointer (gist + link) to the map's Decisions-so-far.
+
+### When sub-issues or dependencies aren't available
+
+Both are GitHub features a given repo may not have, and neither absence is a reason to stop — the tracker is still GitHub, so use the in-GitHub representation instead:
+
+- **No sub-issues** → add the child to a **task list** in the map body, and put `Part of #<map>` at the top of the child's body.
+- **No dependencies** → put a `Blocked by: #<n>, #<n>` line at the top of the child's body. The ticket is unblocked when every issue listed there is closed.
+
+Say which representation is in use the first time it matters, so nobody wonders why GitHub's dependency graph looks empty.
