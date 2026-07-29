@@ -15,7 +15,9 @@ Against that, the costs were real and recurring:
 - [ADR 0001](./0001-explicit-setup-pointer-only-for-hard-dependencies.md), written specifically to stop the setup pointer spreading into skills that didn't need it — policy whose only job was containing this mechanism.
 - A **silent fallback**: `wayfinder` resolved missing config to the local-markdown tracker, so "unconfigured" and "configured for markdown" were indistinguishable. This repo ran for two days with no config while its own map lived on GitHub Issues; a fresh session would have written to `.scratch/` files instead.
 
-The argument that kept it was cost of divergence from upstream. That doesn't hold: pulls here are rare and hand-picked `cherry-pick -x`, and the consumer surface was seven lines across five skills.
+The argument that kept it was cost of divergence from upstream. That doesn't hold here: pulls are rare and hand-picked `cherry-pick -x` rather than automatic, so divergence is paid per deliberate pull rather than continuously.
+
+The maintenance surface it created is easier to describe than to count. `setup-project-home` existed largely to produce the config; three provider templates had to be kept in step with each other whenever an operation changed; and five skills — `wayfinder`, `to-spec`, `to-tickets`, `triage`, `code-review` — each deferred to the generated file rather than saying what they do, so a change to any operation touched the templates, the generator, and whichever skills described it. Removing it moves each skill's GitHub behaviour into the skill itself, where it is edited in one place by whoever changes it.
 
 ## What replaces it
 

@@ -131,7 +131,7 @@ The user may run unblocked tickets in parallel, so expect other sessions to be e
 
 Every map, ticket, and query above is a GitHub issue on the repo this clone points at — `gh` infers it automatically inside a clone (`gh repo view --json nameWithOwner` when you need it named).
 
-**Preflight, and it is a hard stop.** Before the first write, confirm there is a GitHub remote, that `gh auth status` succeeds, and that the repo has Issues enabled. If any one is missing, say which and stop. Do not write the map to local files, and do not reach for another tracker — an unconfigured repo is an error to surface, not a shape to guess at.
+**Preflight, and it is a hard stop.** Before *any* work — including the destination grilling, not merely before the first write — confirm there is a GitHub remote, that `gh auth status` succeeds, and that the repo has Issues enabled. If any one is missing, say which and stop. Naming the destination and mapping the frontier is a long session with the human; discovering afterwards that there is nowhere to put the result is the worst moment to fail. Do not write the map to local files, and do not reach for another tracker — an unconfigured repo is an error to surface, not a shape to guess at.
 
 - **Map**: a single issue labelled `wayfinder:map`, holding the Destination / Notes / Decisions-so-far / fog body. `gh issue create --label wayfinder:map`.
 - **Child ticket**: an issue linked to the map as a GitHub **sub-issue** (`gh api` on the sub-issues endpoint). Labels: `wayfinder:<type>` — `research`, `prototype`, `grilling`, `task`. Once claimed, assigned to the driving dev.

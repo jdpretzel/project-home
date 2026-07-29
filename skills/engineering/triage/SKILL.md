@@ -10,6 +10,14 @@ Move this repo's GitHub issues through a small state machine of triage roles.
 
 If this repo treats external pull requests as a request surface — the root instructions say so, and the default is no — triage covers them too: **a PR is an issue with attached code** — same roles, same states, same machine, with a few deltas marked "for a PR" below. GitHub shares one number space across issues and PRs, so a bare `#42` may be either: resolve with `gh pr view 42` and fall back to `gh issue view 42`.
 
+## Preflight
+
+Before the first read, confirm this repo is reachable on GitHub. If any of these fails, **stop and name the one that failed** — don't guess a queue, don't fall back to any other source of issues:
+
+- **GitHub remote** — `git remote -v`. No remote, or a non-GitHub host: "this repo has no GitHub remote, so there are no issues to triage."
+- **Authentication** — `gh auth status`. On failure: "`gh` is not authenticated — run `gh auth login`."
+- **Issues enabled** — `gh repo view --json nameWithOwner,hasIssuesEnabled`. When `hasIssuesEnabled` is false: "Issues are disabled on `<owner>/<repo>`."
+
 Every comment or issue posted to this repo during triage **must** start with this disclaimer:
 
 ```
@@ -61,7 +69,19 @@ Query the repo's issues (`gh issue list --state open --json number,title,body,la
 2. **`needs-triage`** — evaluation in progress.
 3. **`needs-info` with reporter activity since the last triage notes** — needs re-evaluation.
 
-When PRs are in scope, include external PRs in these buckets and tag each line `[PR]` or `[issue]`. List them with `gh pr list --state open --json number,title,body,labels,author,authorAssociation,comments`, then keep only an `authorAssociation` of `CONTRIBUTOR`, `FIRST_TIME_CONTRIBUTOR`, or `NONE` — dropping `OWNER`, `MEMBER`, and `COLLABORATOR`, because a collaborator's in-flight PR is not triage work. This filter is discovery-only; an explicitly named PR is always triaged regardless of author.
+When PRs are in scope, include external PRs in these buckets and tag each line `[PR]` or `[issue]`.
+
+`gh pr list --json` **cannot** filter by author association — the field isn't in its JSON field set, and asking for it fails the command outright. Use the REST endpoint, which returns `author_association` on every pull request:
+
+```bash
+gh api repos/{owner}/{repo}/pulls --paginate \
+  --jq '.[] | select(.author_association | IN("OWNER","MEMBER","COLLABORATOR") | not)
+        | {number, title, author: .user.login, association: .author_association}'
+```
+
+External is defined by **exclusion** — anything that is not `OWNER`, `MEMBER`, or `COLLABORATOR` — because a collaborator's in-flight PR is not triage work. Excluding is the right direction: GitHub's enum also carries `CONTRIBUTOR`, `FIRST_TIME_CONTRIBUTOR`, `FIRST_TIMER`, `MANNEQUIN`, and `NONE`, and an inclusion list silently drops anyone whose association GitHub adds later.
+
+This filter is discovery-only; an explicitly named PR is always triaged regardless of author.
 
 Show counts and a one-line summary per item. Let the maintainer pick.
 

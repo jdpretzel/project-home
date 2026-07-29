@@ -28,7 +28,7 @@ Confirm all three. If any one is missing, **stop and say which**. Do not offer a
 - **Authentication** — `gh auth status`.
 - **Issues enabled** — `gh repo view --json nameWithOwner,hasIssuesEnabled`.
 
-Report the resolved `owner/repo` so the user can see exactly which repo they configured.
+Report the resolved `owner/repo` so the user can see exactly which repo they configured — and take that name from the **remote**, not from `gh`. `gh repo view` answers from its own configuration and will hand back a plausible `owner/repo` even in a directory with no remote at all, or one whose remote points at GitLab. Trusting it there configures the skills against a repo the user has never seen. On the stop path there is no resolved repo to report, and saying so is the point.
 
 ### 2. Explore
 
@@ -57,7 +57,13 @@ On **yes** — the five canonical roles are `needs-triage`, `needs-info`, `ready
 
 - Already present under those names → record the mapping as identity.
 - The repo uses its own strings for the same roles (`bug:triage` for `needs-triage`) → record that mapping, so `/triage` applies the labels that exist rather than creating duplicates.
-- A role with no label at all → offer `gh label create`. Ask first; never create labels silently.
+- A role with no label at all → offer `gh label create`. Ask first; never create labels silently. If a create **fails** — a permissions error is the usual cause — say which labels didn't get created and record the mapping anyway. A recorded role whose label is missing is a `/triage` run that reports one clear error; an abandoned setup is every skill guessing. Don't treat the failure as a reason to re-ask the triage question.
+
+Record the outcome in exactly this shape, so that re-running with unchanged answers regenerates identical text rather than a fresh paraphrase:
+
+> Triage roles map to labels: `needs-triage` → `<label>`, `needs-info` → `<label>`, `ready-for-agent` → `<label>`, `ready-for-human` → `<label>`, `wontfix` → `<label>`. External pull requests: in scope / not in scope.
+
+Write every role on one line, using the canonical name on both sides where the repo hasn't renamed it. It is repetitive on purpose: a fixed shape is what makes the re-run diff show real changes instead of two models' prose styles.
 
 Ask one follow-up here and only here: **do external pull requests count as requests to triage?** Default **no**. On yes, `/triage` pulls external PRs into its queue alongside issues.
 
@@ -102,7 +108,7 @@ Three rules make re-runs safe:
 
 - An existing `## Agent skills` section is **updated in place**, sub-block by sub-block. Never append a second one.
 - A sub-block whose section answered "no" or "nothing nonstandard" is **omitted** — and **removed** if an earlier run wrote one.
-- Everything outside the sub-blocks this skill owns is left exactly as found. User edits to surrounding sections, and to the prose inside a block, survive a re-run.
+- Everything outside the sub-blocks this skill owns is left exactly as found. User edits to surrounding sections survive a re-run untouched. Inside a sub-block the recorded **answers** are authoritative and get rewritten from the fixed shape above — so if a hand-edited line disagrees with them, show that as the diff and let the user decide, rather than silently preserving or silently overwriting it.
 
 If both sub-blocks are omitted, don't write an empty `## Agent skills` heading — and remove one a previous run left behind.
 

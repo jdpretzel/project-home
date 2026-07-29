@@ -57,9 +57,32 @@ Iterate until the user approves the breakdown.
 
 ### 5. Publish the tickets as GitHub issues
 
-Publish one issue per ticket **in dependency order** (blockers first), so each ticket's blocking edges can reference real issue numbers. Use GitHub's native issue dependencies where the repo has them; where it doesn't, set each ticket's "Blocked by" to a `Blocked by: #<n>, #<n>` line at the top of the body. Where this repo has a triage vocabulary, apply its `ready-for-agent` label unless instructed otherwise — the tickets are agent-grabbable by construction. Where it doesn't triage, publish without a label and say so; don't fail the publish over a label that was never meant to exist, and don't create one.
+**Check these three first, before creating anything** — an error returned by the first `gh issue create` is a worse way to discover them, because by then something may already exist:
 
-If there is no GitHub remote, `gh` is unauthenticated, or the repo has Issues disabled, stop and say which. Don't write the tickets to local files instead.
+- **GitHub remote** — `git remote -v`. Read the repo name from the remote, not from `gh`, which answers from its own config even when the remote is absent or points elsewhere.
+- **Authentication** — `gh auth status`.
+- **Issues enabled** — `gh repo view --json nameWithOwner,hasIssuesEnabled`.
+
+If any fails, **stop and say which**. Don't publish the tickets anywhere else instead — not local files, not Discussions, not a project board, not a checklist pasted into another issue. The tickets exist so `/implement` can pick them off GitHub; somewhere else is not a lesser version of that, it's a different artifact.
+
+Then publish one issue per ticket **in dependency order** (blockers first), so each ticket's blocking edges can reference real issue numbers.
+
+Where this repo has a triage vocabulary, apply its `ready-for-agent` label unless instructed otherwise — the tickets are agent-grabbable by construction. Where it doesn't triage, publish without a label and say so; don't fail the publish over a label that was never meant to exist, and don't create one.
+
+**Wiring the blocking edges.** Prefer GitHub's native issue dependencies, which render the frontier visually in GitHub's own UI:
+
+```bash
+gh api --method POST repos/{owner}/{repo}/issues/<blocked>/dependencies/blocked_by \
+  -F issue_id=<blocker-db-id>
+```
+
+`<blocker-db-id>` is the blocker's numeric **database id**, from `gh api repos/{owner}/{repo}/issues/<n> --jq .id` — **not** the `#number` you see in the UI, and not the `node_id`. Passing the issue number here is the trap: it either fails or silently wires the wrong issue, because low issue numbers are also valid database ids belonging to entirely different repositories.
+
+There is no field that advertises whether dependencies are available, so find out by trying: wire the first edge, and if the API rejects it, fall back for **all** of them rather than leaving the set half-wired in two different representations.
+
+The fallback is a `Blocked by: #<n>, #<n>` line at the top of each blocked ticket's body. **Say that you did**, once, as you publish — otherwise the frontier looks unwired to anyone who checks GitHub's dependency graph and finds it empty.
+
+Note the asymmetry, because it is the difference between a stop and a shrug: no remote, no auth, or no Issues is a **hard stop**, while missing dependencies is a **degradation** — a named substitute for the same information on the same tracker. A degradation always ships a replacement; a hard stop never does.
 
 Work the **frontier**: any ticket whose blockers have all landed. For a purely linear chain that means top to bottom.
 

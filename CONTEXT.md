@@ -1,6 +1,6 @@
-# Matt Pocock Skills
+# Project Home
 
-A collection of agent skills (slash commands and behaviors) loaded by Claude Code. Skills are organized into buckets and consumed by per-repo configuration emitted by `/setup-project-home`.
+A collection of agent skills (slash commands and behaviours) shipped as a Claude Code plugin, forked from `mattpocock/skills`. Skills are organised into buckets under `skills/`; `engineering/` and `productivity/` are the promoted set the plugin ships. Most skills need no per-repo configuration — `/setup-project-home` records only the little that genuinely varies.
 
 ## Language
 
@@ -16,7 +16,7 @@ _Avoid_: ticket (use only when quoting external systems that call them tickets, 
 A `wayfinder` unit — a child **Issue** of a `wayfinder:map` holding a *question* whose resolution is a decision, not a slice of a build to execute. The **decision** qualifier is what keeps it distinct from an implementation ticket; `wayfinder` introduces the term, then uses "ticket".
 
 **Triage role**:
-A canonical state-machine label applied to an **Issue** during triage (e.g. `needs-triage`, `ready-for-afk`). Each role maps to a real label string on the repo, recorded in the root instructions by `/setup-project-home` — and only where the repo actually triages.
+A canonical state-machine label applied to an **Issue** during triage (e.g. `needs-triage`, `ready-for-agent`). Each role maps to a real label string on the repo, recorded in the root instructions by `/setup-project-home` — and only where the repo actually triages.
 
 ## Relationships
 
