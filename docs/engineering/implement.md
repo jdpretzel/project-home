@@ -26,7 +26,7 @@ Reach for it once the work is written down as a spec or split into tickets and y
 
 An issue tracker configured by [setup-project-home](https://aihero.dev/skills-setup-project-home) — the commit's ticket reference (on GitHub, `Closes #<n>`) is how the review finds its spec. Without it the review's Spec axis falls back to a spec file, or skips and says so.
 
-A ticket whose blockers have already merged. Dependent work branches off the default branch, so it can only see a blocker's changes once that blocker's pull request has landed — independent tickets on the frontier still run in parallel.
+A ticket whose blockers have already merged. Dependent work branches off the default branch — or off the integration branch when the ticket names one — so it can only see a blocker's changes once that blocker's pull request has landed. Independent tickets on the frontier still run in parallel.
 
 ## Pre-agreed seams
 
