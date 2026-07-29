@@ -24,7 +24,7 @@ Reach for it once the work is written down as a spec or split into tickets and y
 
 ## Prerequisites
 
-An issue tracker configured by [setup-project-home](https://aihero.dev/skills-setup-project-home) — the `Closes #<n>` trailer and the pull request both need one. Without it the review's Spec axis falls back to a spec file, or skips and says so.
+An issue tracker configured by [setup-project-home](https://aihero.dev/skills-setup-project-home) — the commit's ticket reference (on GitHub, `Closes #<n>`) is how the review finds its spec. Without it the review's Spec axis falls back to a spec file, or skips and says so.
 
 A ticket whose blockers have already merged. Dependent work branches off the default branch, so it can only see a blocker's changes once that blocker's pull request has landed — independent tickets on the frontier still run in parallel.
 
@@ -44,7 +44,7 @@ The pull request is an additional review surface, not a substitute for that in-r
 
 - Nothing pauses to ask you for permission to push or to open the PR.
 - Whatever review finds lands as separate fix-up commits, rather than being amended back into the implementation commit.
-- The run ends on an open PR, with the merge left to you.
+- The run ends on an open PR — or, in a repo with no remote, on a reviewed branch reported ready to merge — with the merge left to you.
 
 ## Where it fits
 
