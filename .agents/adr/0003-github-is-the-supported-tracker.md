@@ -29,6 +29,8 @@ Each skill owns the GitHub behaviour it uses. `wayfinder` carries its own sub-is
 
 **Hard-stop, loudly, and name the missing piece** when the GitHub **repository**, **authentication**, or **Issues capability** is absent. Never substitute another tracker, never fall back to local files, and never half-configure.
 
+The hard stop binds the skills whose **deliverable lives on the tracker** — setup, triage, the publishes in `to-spec`/`to-tickets`, wayfinder's map. `code-review` sits outside it: its deliverable is the review, and GitHub is one spec *source* among several that were never tracker-shaped (a passed path, a spec file under `docs/`). An unreachable issue reference there falls through to the remaining sources and, failing those, reports the axis **blocked** by name — which is this posture's loudness applied at the scope the failure actually has, not a fallback to another tracker. And "half-configure" means partial state that reads as something else *silently*; a recorded answer with a loudly named gap — a label mapping noting which labels a failed `gh label create` still owes the repo — is the opposite of that, and is how setup avoids the two genuine half-configurations of dropping the role or abandoning the run.
+
 **Keep the in-GitHub representations** when GitHub's own newer features are unavailable — a **task list** in the map body where sub-issues aren't enabled, a `Blocked by: #<n>` line where issue dependencies aren't. Degrading the representation is not selecting a different tracker, and the distinction is load-bearing rather than pedantic: this repo's own wayfinder map runs on the `Blocked by:` form today, so a rule that stopped on a missing dependency API would break the tracker it was written to protect.
 
 ## Consequences

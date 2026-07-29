@@ -61,13 +61,13 @@ On **yes** — the five canonical roles are `needs-triage`, `needs-info`, `ready
 
 - Already present under those names → record the mapping as identity.
 - The repo uses its own strings for the same roles (`bug:triage` for `needs-triage`) → record that mapping, so `/triage` applies the labels that exist rather than creating duplicates.
-- A role with no label at all → offer `gh label create`. Ask first; never create labels silently. If a create **fails** — a permissions error is the usual cause — say which labels didn't get created and record the mapping anyway. A recorded role whose label is missing is a `/triage` run that reports one clear error; an abandoned setup is every skill guessing. Don't treat the failure as a reason to re-ask the triage question.
+- A role with no label at all → offer `gh label create`. Ask first; never create labels silently. If a create **fails** — a permissions error is the usual cause — record the mapping anyway, say which labels don't exist yet, and hand the user the exact `gh label create` commands that finish the job once someone with permission runs them. This is not the half-configuration ADR 0003 forbids: that rule is about proceeding without GitHub or letting partial state read as something else silently, and both alternatives here would commit exactly that sin — dropping the role writes a mapping that silently lacks it, and abandoning the run leaves every skill guessing. A complete recorded answer with a loudly named gap is the opposite: consumers that hit the missing label report one clear error naming it, instead of failing somewhere unexplained. Don't treat the failure as a reason to re-ask the triage question.
 
 Record the outcome in exactly this shape, so that re-running with unchanged answers regenerates identical text rather than a fresh paraphrase:
 
 > Triage roles map to labels: `needs-triage` → `<label>`, `needs-info` → `<label>`, `ready-for-agent` → `<label>`, `ready-for-human` → `<label>`, `wontfix` → `<label>`. External pull requests: in scope / not in scope.
 
-Write every role on one line, using the canonical name on both sides where the repo hasn't renamed it. It is repetitive on purpose: a fixed shape is what makes the re-run diff show real changes instead of two models' prose styles.
+Write every role on one line, using the canonical name on both sides where the repo hasn't renamed it. It is repetitive on purpose: a fixed shape is what makes the re-run diff show real changes instead of two models' prose styles. For this line and the does-not-triage line above, the `>` is this document quoting the shape, not part of it — what lands in the file is the plain line. And where the regenerated sub-block already matches what's on disk byte for byte, say so and write nothing: an unconditional rewrite is where stray formatting drift would creep in.
 
 Ask one follow-up here and only here: **do external pull requests count as requests to triage?** Default **no**. On yes, `/triage` pulls external PRs into its queue alongside issues.
 

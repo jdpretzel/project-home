@@ -24,7 +24,7 @@ Reach for it once the work is written down as a spec or split into tickets and y
 
 ## Prerequisites
 
-A GitHub repo you can reach — the commit's `Closes #<n>` reference is how the review finds its spec. Without a ticket the review's Spec axis falls back to a spec file, or skips and says so.
+A GitHub repo you can reach gets the full loop — the commit's `Closes #<n>` reference is how the review finds its spec, and the run ends on an open PR. A repo with no remote is still supported: the run does everything else and stops at the reviewed branch instead of a PR. Without a ticket the review's Spec axis falls back to a spec file, or skips and says so.
 
 A ticket whose blockers have already merged. Dependent work branches off the default branch — or off the integration branch when the ticket names one — so it can only see a blocker's changes once that blocker's pull request has landed. Independent tickets on the frontier still run in parallel.
 

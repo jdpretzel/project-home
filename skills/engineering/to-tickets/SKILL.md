@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Break a plan, spec, or conversation into a set of **tickets** — tracer-bullet vertical slices, each declaring the tickets that **block** it.
 
-Tickets are published as GitHub issues on this repo. If this repo triages, its label vocabulary should have been provided to you — run `/setup-project-home` if not. Read the root instructions (`CLAUDE.md` / `AGENTS.md`) for **three** states rather than two: a recorded label vocabulary, an explicit line saying this repo doesn't triage, or neither. A repo that doesn't triage is a supported case, not a misconfiguration — but that is the recorded "no", not the silence. Silence means setup never ran, so the question is unanswered rather than answered no; see step 5.
+Tickets are published as GitHub issues on this repo. Before anything else, read the root instructions (`CLAUDE.md` / `AGENTS.md`) — and only them: labels that happen to exist on the repo are not a recorded answer — for the `## Agent skills` → `### Triage labels` sub-block, which is in one of **three** states: a recorded label vocabulary, a recorded line that this repo doesn't triage, or no sub-block at all. A repo that doesn't triage is a supported case, not a misconfiguration — but that is the recorded "no", not the silence. Silence means `/setup-project-home` never ran, so the question is unanswered rather than answered no: stop here and tell the user to run it (it's user-invoked; don't run it yourself), *before* drafting slices the user will approve for nothing — stopping first costs nothing, since the conversation keeps everything. Step 5 carries the label behaviour for the two recorded states.
 
 ## Process
 
@@ -69,7 +69,7 @@ Then publish one issue per ticket **in dependency order** (blockers first), so e
 
 The label follows the three states, and reading two states where there are three is the whole trap:
 
-- **A triage vocabulary is recorded** → apply its `ready-for-agent` label unless instructed otherwise — the tickets are agent-grabbable by construction.
+- **A triage vocabulary is recorded** → apply its `ready-for-agent` label unless instructed otherwise — the tickets are agent-grabbable by construction. If applying it fails because the label doesn't exist on the repo — setup records the mapping even when a `gh label create` failed, precisely so this error lands here with a name — the tickets still publish: issues first, labels second. Report the missing label once, with the `gh label create` and `gh issue edit --add-label` commands that finish the job; never create the label yourself.
 - **A does-not-triage line is recorded** → publish without a label and say so; don't fail the publish over a label that was never meant to exist, and don't create one.
 - **Neither is recorded** → the triage question is unanswered, not answered no. Stop before publishing and say `/setup-project-home` hasn't been run on this repo — and check it alongside the three preflight checks above, before creating anything, because a set half-published unlabelled is worse than one never started. On a repo that does triage, unlabelled tickets sit outside the queue meant to pick them up, and nothing about them shows anything went wrong.
 
