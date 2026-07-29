@@ -1,0 +1,3 @@
+interface:
+  display_name: "Decision Brief"
+  short_description: "Batched decisions as one legible HTML page"
