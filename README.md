@@ -32,8 +32,8 @@ when you type them; model-invoked skills the agent can also reach on its own.
 - **[grill-with-docs](skills/engineering/grill-with-docs/SKILL.md)** — Grilling session that also builds your project's domain model, updating `CONTEXT.md` and ADRs inline.
 - **[triage](skills/engineering/triage/SKILL.md)** — Move issues through a state machine of triage roles.
 - **[improve-codebase-architecture](skills/engineering/improve-codebase-architecture/SKILL.md)** — Scan a codebase for deepening opportunities, presented as a visual HTML report.
-- **[setup-project-home](skills/engineering/setup-project-home/SKILL.md)** — Configure this repo for the engineering skills (issue tracker, triage labels, doc layout). Run once per repo.
-- **[to-spec](skills/engineering/to-spec/SKILL.md)** — Turn the current conversation into a spec and publish it to the issue tracker.
+- **[setup-project-home](skills/engineering/setup-project-home/SKILL.md)** — Configure this repo for the engineering skills: verify GitHub access, triage labels if you use them, unusual doc paths. Run once per repo.
+- **[to-spec](skills/engineering/to-spec/SKILL.md)** — Turn the current conversation into a spec and publish it as a GitHub issue.
 - **[to-tickets](skills/engineering/to-tickets/SKILL.md)** — Break a plan or spec into tracer-bullet tickets, each declaring its blocking edges.
 - **[implement](skills/engineering/implement/SKILL.md)** — Build the work a spec or ticket describes, driving `/tdd` internally, then committing, running `/code-review` against that commit, and opening a PR.
 - **[wayfinder](skills/engineering/wayfinder/SKILL.md)** — Plan a huge chunk of work as a shared map of decision tickets, resolved one at a time until the way is clear.

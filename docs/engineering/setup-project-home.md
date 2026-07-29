@@ -12,32 +12,35 @@ npx skills update setup-project-home
 
 ## What it does
 
-`setup-project-home` teaches one repo how the engineering skills should behave in it — where issues live, what the triage labels are called, and where the domain docs sit — and records those answers as **config** the other skills read.
+`setup-project-home` records the handful of things about *your* repo that the engineering skills can't work out on their own — whether you triage, what your label strings actually are, and where your domain docs live if they aren't in the usual places.
 
-It writes config, it does not hard-code behaviour. The engineering chain assumes three files under `docs/agents/` exist; this skill is the one-time bootstrap that produces them, discovered from your actual repo (`git remote`, existing labels, existing `CONTEXT.md`) and confirmed with you rather than guessed. It is prompt-driven — explore, present what it found, confirm, then write — not a deterministic scaffold.
+It is deliberately small, because most of what a repo needs is not variable. **GitHub is the supported tracker**, so there is no tracker to choose and no command recipes get copied into your repo — each skill carries its own. It is prompt-driven — explore, present what it found, confirm, then write — and on a repo with defaults everywhere it correctly writes nothing at all.
 
 ## When to reach for it
 
 You invoke this by typing `/setup-project-home` — the agent won't reach for it on its own.
 
-Reach for it **once per repo, before the first use of any other engineering skill**. If [triage](https://aihero.dev/skills-triage), [to-spec](https://aihero.dev/skills-to-spec), or [to-tickets](https://aihero.dev/skills-to-tickets) start guessing where your issues live or applying labels that don't exist, they haven't been set up here yet. Re-run it only to switch issue trackers or start over — day-to-day tweaks are just edits to `docs/agents/*.md`.
+Reach for it **once per repo**, before the first use of [triage](https://aihero.dev/skills-triage), [to-spec](https://aihero.dev/skills-to-spec), or [to-tickets](https://aihero.dev/skills-to-tickets) — if those start applying labels your repo doesn't have, they haven't been set up here yet. You can also re-run it any time: it reads what's already there, shows a diff, and rewrites only its own blocks, leaving the rest of your file alone.
 
-## The three decisions
+## Preflight, then two questions
 
-It leads each with a recommended answer you can accept in a word, and skips whatever it can already infer — so most runs are a couple of quick confirmations:
+Before anything else it checks you have a **GitHub remote, an authenticated `gh`, and Issues enabled**. If one is missing it stops and says which — it will not offer a different tracker, and it will not half-configure the repo.
 
-- **Issue tracker** — where work is tracked, so `triage`/`to-spec`/`to-tickets` know whether to call `gh`, `glab`, write markdown under `.scratch/`, or follow a workflow you describe. GitHub, GitLab, local markdown, or other. (It proposes the one that matches your `git remote`.)
-- **Triage labels** — asked only if the `triage` skill is installed, and then just: keep the default labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`)? Say no only if your tracker already uses other names, so `triage` applies real ones instead of creating duplicates.
-- **Domain docs** — assumed single-context (one `CONTEXT.md` + `docs/adr/` at the root), which fits almost every repo; it only raises a multi-context map when it spots monorepo signals.
+Then two questions, each led by a recommended answer you can accept in a word:
 
-The output is a set of files under `docs/agents/` — `issue-tracker.md`, `domain.md`, and `triage-labels.md` when `triage` is installed — plus an `## Agent skills` block pointing to them in whichever of `CLAUDE.md` / `AGENTS.md` the repo already uses. Those files are the shared substrate the rest of the toolkit stands on.
+- **Does this repo use `/triage`?** Default **no**, and on "no" it writes nothing — a repo that doesn't triage doesn't need a label vocabulary. On "yes" it reconciles the five canonical roles (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`) against the labels you already have, mapping to your strings rather than creating duplicates, and offering to create any that are genuinely missing. It asks here, and only here, whether external pull requests count as requests to triage.
+- **Where do your domain docs live?** Only asked as a confirmation. Skills already look for `CONTEXT.md` at the root and ADRs under `docs/adr/`; if that's where yours are, nothing is recorded. Only a genuinely different path — or a monorepo's `CONTEXT-MAP.md` — earns a line.
+
+Whatever it records goes into an `## Agent skills` block in your `CLAUDE.md` or `AGENTS.md` (one file — if they're symlinked it edits the target once). There is no separate config tree.
 
 ## It's working if
 
-- `issue-tracker.md` and `domain.md` land under `docs/agents/` (plus `triage-labels.md` when `triage` is installed), and an `## Agent skills` section appears in your `CLAUDE.md` or `AGENTS.md`.
-- The tracker it proposes matches your real `git remote`, and the labels match strings that already exist in your repo.
-- Afterwards, `triage` and `to-tickets` act on the right place with the right labels instead of asking or guessing.
+- It names the `owner/repo` it resolved, so you can see which repo you configured.
+- A repo with no triage habit and docs in the usual places comes out with **nothing written**, and it tells you so rather than treating it as a failure.
+- On a re-run you see a diff against what's already there, and your own edits to the surrounding file survive untouched.
+- Afterwards, `triage` and `to-tickets` apply labels that exist instead of inventing them.
+- Without a reachable GitHub repo, it stops and names the missing piece rather than falling back to anything.
 
 ## Where it fits
 
-`setup-project-home` is a **run-once setup** — the foundation the whole engineering set stands on, not a step you repeat. Its neighbours are the skills that read what it writes: [triage](https://aihero.dev/skills-triage), because it applies the label vocabulary configured here, and [to-spec](https://aihero.dev/skills-to-spec) / [to-tickets](https://aihero.dev/skills-to-tickets), because they publish into the issue tracker configured here. Run it first; everything downstream assumes it has. When you're unsure which skill or flow fits, [ask-matt](https://aihero.dev/skills-ask-matt) routes you.
+`setup-project-home` is a **run-once setup**, though a harmless one to repeat. Its neighbours are the skills that read what it writes: [triage](https://aihero.dev/skills-triage), which applies the label vocabulary recorded here, and [to-spec](https://aihero.dev/skills-to-spec) / [to-tickets](https://aihero.dev/skills-to-tickets), which apply `ready-for-agent` as they publish. Everything else the skills bring with them. When you're unsure which skill or flow fits, [ask-matt](https://aihero.dev/skills-ask-matt) routes you.

@@ -12,7 +12,7 @@ npx skills update to-spec
 
 ## What it does
 
-`to-spec` turns the current conversation and your codebase understanding into a spec (you may know this document as a PRD), then publishes it to your issue tracker.
+`to-spec` turns the current conversation and your codebase understanding into a spec (you may know this document as a PRD), then publishes it as a GitHub issue.
 
 It does **not** interview you again. By the time you reach for it, the alignment work is done — `to-spec` synthesises what is already known rather than asking a fresh round of questions.
 
@@ -24,7 +24,7 @@ Reach for it once a change has been talked through and the domain language is se
 
 ## Prerequisites
 
-`to-spec` publishes into your issue tracker, so [setup-project-home](https://aihero.dev/skills-setup-project-home) must have configured the tracker and triage labels for this repo first. It applies the `ready-for-agent` label itself — no separate triage pass needed.
+A GitHub repo you can reach — the spec is published as an issue on it. It applies the `ready-for-agent` label itself, so if your repo triages under different label strings, [setup-project-home](https://aihero.dev/skills-setup-project-home) needs to have recorded that mapping first. No separate triage pass is needed either way.
 
 ## What the spec includes
 
