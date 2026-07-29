@@ -59,12 +59,16 @@ for bucket in misc personal in-progress deprecated; do
 done
 
 echo "Retired tracker abstraction (ADR 0003)"
-# Scope: the surfaces that must speak as the system currently behaves — the
-# promoted skills, the docs pages, and the indexes. `.agents/adr/`, CHANGELOG.md
-# and CONTEXT.md are NOT scanned and are not "exemptions": naming what was
-# removed is their whole job (decision records, and a glossary whose _Avoid_
-# lists must be able to quote retired vocabulary).
-SCAN=(skills/engineering skills/productivity docs README.md CLAUDE.md)
+# Scope, stated as what IS scanned rather than as a list of exemptions — the
+# surfaces a reader or a model acts on, which must therefore describe the
+# system as it currently behaves. `.out-of-scope/` is in scope precisely
+# because triage reads it at runtime to surface prior rejections, so a stale
+# entry there is a wrong answer given to a user, not an archive.
+#
+# Everything else is unscanned, including `.agents/` and CHANGELOG.md: naming
+# what was removed is the whole job of a decision record, and of CONTEXT.md's
+# _Avoid_ lists and flagged ambiguities.
+SCAN=(skills/engineering skills/productivity docs .out-of-scope README.md CLAUDE.md)
 
 stale=$(grep -rn \
   -e 'issue-tracker-github' -e 'issue-tracker-gitlab' -e 'issue-tracker-local' \
@@ -87,24 +91,32 @@ fi
 
 # Behaviours the spec required verifying that no manifest can express. These are
 # assertions about the prose, which is where the behaviour actually lives.
+#
+# Each anchor must be a phrase that appears EXACTLY ONCE in its file, and only
+# in the passage carrying the behaviour. An anchor that also occurs elsewhere
+# passes when the passage is deleted, which is a check that cannot fail — worse
+# than no check, because it reports safety it never established.
 echo "Required behaviours are still specified"
 setup=skills/engineering/setup-project-home/SKILL.md
 way=skills/engineering/wayfinder/SKILL.md
-grep -q 'gh auth status' "$setup" && grep -q 'hasIssuesEnabled' "$setup" \
-  || report "$setup: preflight no longer checks auth and Issues capability"
-grep -q 'stop and say which' "$setup" \
-  || report "$setup: missing GitHub loud stop"
-grep -q 'write nothing' "$setup" \
-  || report "$setup: triage-off branch (write nothing) missing"
-grep -q 'Reconcile them against' "$setup" \
-  || report "$setup: triage-on branch (reconcile real labels) missing"
-grep -q 'stop and say which one' "$way" \
-  || report "$way: missing GitHub loud stop"
-grep -q "Blocked by: #<n>" "$way" && grep -q 'task list' "$way" \
-  || report "$way: in-GitHub degradation (task lists, Blocked by lines) missing"
+assert_once() { # file, anchor, description
+  case "$(grep -cF "$2" "$1")" in
+    1) ;;
+    0) report "$1: $3 — anchor gone" ;;
+    *) report "$1: anchor for $3 is no longer unique; the check cannot fail" ;;
+  esac
+}
+assert_once "$setup" 'gh auth status' "preflight auth check"
+assert_once "$setup" 'hasIssuesEnabled' "preflight Issues-capability check"
+assert_once "$setup" 'stop and say which' "GitHub loud stop"
+assert_once "$setup" 'No labels, no block' "triage-off branch"
+assert_once "$setup" 'Reconcile them against' "triage-on branch"
+assert_once "$way" 'stop and say which one' "GitHub loud stop"
+assert_once "$way" '**No sub-issues**' "task-list degradation"
+assert_once "$way" '**No dependencies**' "Blocked-by degradation"
 for s in to-spec to-tickets; do
-  grep -q "doesn't triage" "skills/engineering/$s/SKILL.md" \
-    || report "skills/engineering/$s/SKILL.md: no-triage label branch missing"
+  assert_once "skills/engineering/$s/SKILL.md" \
+    "don't fail the publish over a label" "no-triage label branch"
 done
 
 if [ "$fail" -eq 0 ]; then

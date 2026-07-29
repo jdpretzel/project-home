@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Break a plan, spec, or conversation into a set of **tickets** — tracer-bullet vertical slices, each declaring the tickets that **block** it.
 
-Tickets are published as GitHub issues on this repo. The triage label vocabulary should have been provided to you — run `/setup-project-home` if not.
+Tickets are published as GitHub issues on this repo. If this repo triages, its label vocabulary should have been provided to you — run `/setup-project-home` if not. A repo that doesn't triage is a supported case, not a misconfiguration.
 
 ## Process
 

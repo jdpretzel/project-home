@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 This skill takes the current conversation context and codebase understanding and produces a spec (you may know this document as a PRD). Do NOT interview the user — just synthesize what you already know.
 
-The spec is published as a GitHub issue on this repo. The triage label vocabulary should have been provided to you — run `/setup-project-home` if not.
+The spec is published as a GitHub issue on this repo. If this repo triages, its label vocabulary should have been provided to you — run `/setup-project-home` if not. A repo that doesn't triage is a supported case, not a misconfiguration.
 
 ## Process
 

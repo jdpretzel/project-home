@@ -12,4 +12,4 @@ Keeping configuration management to a single skill also avoids the maintenance c
 
 ## Prior requests
 
-- #106 — Feature request: verify/check mode for setup-matt-pocock-skills <!-- upstream issue title quoted verbatim; the skill is named setup-project-home in this fork -->
+- #106 — Feature request: verify/check mode for the setup skill (the upstream issue title used the skill's old name, before it was renamed to `setup-project-home` in this fork)
