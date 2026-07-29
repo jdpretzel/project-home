@@ -24,7 +24,7 @@ Reach for it when your repo's issues include raw, unevaluated reports and you wa
 
 ## Prerequisites
 
-A GitHub repo you can reach, plus a label mapping. The role names above are **canonical** — the actual label strings on your repo may differ, and recording that mapping is what [setup-project-home](https://aihero.dev/skills-setup-project-home) is for. It also records whether external pull requests count as a request surface; the default is no. Who counts as external is not configurable — it is GitHub's own `authorAssociation`, keeping contributors and first-time contributors while dropping owners, members, and collaborators.
+A GitHub repo you can reach, plus a label mapping. The role names above are **canonical** — the actual label strings on your repo may differ, and recording that mapping is what [setup-project-home](https://aihero.dev/skills-setup-project-home) is for. On a repo whose setup recorded that it doesn't triage, `/triage` stops and says so — the answer on file is "no", and re-running setup is how you change it — and where setup never ran at all, it stops and sends you there first. It also records whether external pull requests count as a request surface; the default is no. Who counts as external is not configurable — it is GitHub's own `authorAssociation`, keeping contributors and first-time contributors while dropping owners, members, and collaborators.
 
 ## A PR is an issue with attached code
 

@@ -12,7 +12,9 @@ If this repo treats external pull requests as a request surface — the root ins
 
 ## Preflight
 
-Before the first read, confirm this repo is reachable on GitHub. If any of these fails, **stop and name the one that failed** — don't guess a queue, don't fall back to any other source of issues:
+Check the **triage vocabulary first** — it's a local read that can spare the network calls below: the root instructions' `## Agent skills` → `### Triage labels` sub-block is the *only* vocabulary source (labels that happen to exist on the repo are not a recorded answer), triage runs only on a recorded mapping, and the Roles section below carries the three states and their stops. When in doubt between a mapping and a recorded "no", stop and ask — the two states diverge completely.
+
+Then, before the first read, confirm this repo is reachable on GitHub. If any of these fails, **stop and name the one that failed** — don't guess a queue, don't fall back to any other source of issues:
 
 - **GitHub remote** — `git remote -v`. No remote, or a non-GitHub host: "this repo has no GitHub remote, so there are no issues to triage."
 - **Authentication** — `gh auth status`. On failure: "`gh` is not authenticated — run `gh auth login`."
@@ -48,7 +50,7 @@ For a PR, the same states read against the attached code: `ready-for-agent` mean
 
 Every triaged issue should carry exactly one category role and one state role. If state roles conflict, flag it and ask the maintainer before doing anything else.
 
-These are canonical role names — the actual label strings on this repo may differ. The mapping should have been provided to you in the root instructions - run `/setup-project-home` if not.
+These are canonical role names — the actual label strings on this repo may differ. The root instructions' `## Agent skills` → `### Triage labels` sub-block is in one of three states, and triage only runs in the first: a **recorded mapping** → use those strings everywhere below. A **recorded does-not-triage line** → stop: this repo answered the triage question with "no", so there is no vocabulary and nothing to move through the state machine — don't send the user to setup as if something were missing; say the recorded answer is "no" and that re-running `/setup-project-home` (it's user-invoked) is how to change it, if triaging is what they now want. **No sub-block at all** → setup never ran; stop and tell the user to run `/setup-project-home` first rather than guessing a vocabulary.
 
 State transitions: an unlabeled issue normally goes to `needs-triage` first; from there it moves to `needs-info`, `ready-for-agent`, `ready-for-human`, or `wontfix`. `needs-info` returns to `needs-triage` once the reporter replies. The maintainer can override at any time — flag transitions that look unusual and ask before proceeding.
 

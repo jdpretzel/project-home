@@ -87,7 +87,13 @@ assert_once "$setup" 'Reconcile them against' "triage-on branch"
 assert_once "$way" 'stop and say which one' "GitHub loud stop"
 assert_once "$way" '**No sub-issues**' "task-list degradation"
 assert_once "$way" '**No dependencies**' "Blocked-by degradation"
+# Every skill that publishes to or operates on GitHub carries its own hard
+# stop; a consumer losing its preflight must fail this check, not stay green.
+assert_once skills/engineering/triage/SKILL.md \
+  'stop and name the one that failed' "GitHub loud stop"
 for s in to-spec to-tickets; do
+  assert_once "skills/engineering/$s/SKILL.md" \
+    'stop and say which' "GitHub loud stop"
   assert_once "skills/engineering/$s/SKILL.md" \
     "don't fail the publish over a label" "no-triage label branch"
   # The third state, and the reason the recorded "no" above is written at all:

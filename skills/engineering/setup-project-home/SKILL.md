@@ -37,7 +37,7 @@ Read what exists; don't assume:
 - `CLAUDE.md` and `AGENTS.md` at the root — which exist, is either a **symlink** to the other, and is there already an `## Agent skills` section?
 - `CONTEXT.md` and `CONTEXT-MAP.md`, at the root or elsewhere
 - ADR directories — `docs/adr/`, `src/*/docs/adr/`, or somewhere else entirely
-- `gh label list` — what label vocabulary already exists
+- `gh label list --limit 500` — what label vocabulary already exists. The limit matters: the bare command returns at most 30 labels, and a triage label hiding past that cutoff reads as missing, so setup would offer to create a duplicate or record a wrong mapping.
 - Monorepo signals — a `pnpm-workspace.yaml`, a `workspaces` field in `package.json`, or a populated `packages/*` with its own `src/`. Absent means single-context, which is almost every repo.
 - A leftover `docs/agents/` directory — output from an older version of this skill. Its `issue-tracker.md` is obsolete: the tracker is no longer configurable, so nothing reads that file. Offer to delete it; don't delete without asking.
 
