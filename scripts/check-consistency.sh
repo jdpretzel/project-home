@@ -35,9 +35,11 @@ for bucket in engineering productivity; do
     [ -f "docs/$bucket/$name.md" ] \
       || report "$name: missing docs page docs/$bucket/$name.md"
     # User-invoked skills are the router's remit; model-invoked ones are not.
+    # Match the backticked `/name` form the router actually uses — a bare
+    # substring would count a skill merely mentioned in passing as routed.
     if grep -q '^disable-model-invocation: true' "$dir/SKILL.md" \
        && [ "$name" != "ask-matt" ]; then
-      grep -q "/$name" skills/engineering/ask-matt/SKILL.md \
+      grep -q '`/'"$name"'`' skills/engineering/ask-matt/SKILL.md \
         || report "$name: user-invoked but not routed by ask-matt"
     fi
   done
@@ -57,23 +59,53 @@ for bucket in misc personal in-progress deprecated; do
 done
 
 echo "Retired tracker abstraction (ADR 0003)"
-# Three deliberate exemptions, all the same shape — places whose job is to name
-# what was removed:
-#   - .agents/adr/ and CHANGELOG.md are decision records.
-#   - CONTEXT.md is the glossary; its _Avoid_ lists and flagged ambiguities
-#     exist precisely to name retired vocabulary.
-#   - setup-project-home names docs/agents/ to offer cleanup of leftovers from
-#     its own older versions.
+# Scope: the surfaces that must speak as the system currently behaves — the
+# promoted skills, the docs pages, and the indexes. `.agents/adr/`, CHANGELOG.md
+# and CONTEXT.md are NOT scanned and are not "exemptions": naming what was
+# removed is their whole job (decision records, and a glossary whose _Avoid_
+# lists must be able to quote retired vocabulary).
+SCAN=(skills/engineering skills/productivity docs README.md CLAUDE.md)
+
 stale=$(grep -rn \
   -e 'issue-tracker-github' -e 'issue-tracker-gitlab' -e 'issue-tracker-local' \
-  -e 'docs/agents/issue-tracker' -e 'configured tracker' -e 'tracker-specific' \
-  -e 'local-markdown tracker' -e 'setup-matt-pocock-skills' -e 'glab ' \
-  --include='*.md' \
-  skills/engineering skills/productivity docs README.md CLAUDE.md \
-  2>/dev/null | grep -v '^skills/engineering/setup-project-home/SKILL.md')
+  -e 'configured tracker' -e 'tracker-specific' -e 'local-markdown tracker' \
+  -e 'a real tracker' -e 'real issue tracker' -e 'local tracker' \
+  -e 'issue-tracker wiring' -e 'scratch/<feature' \
+  -e 'setup-matt-pocock-skills' -e 'glab ' \
+  --include='*.md' "${SCAN[@]}" 2>/dev/null)
 if [ -n "$stale" ]; then
   while IFS= read -r line; do report "stale reference: $line"; done <<<"$stale"
 fi
+
+# docs/agents/ gets its own pass: setup-project-home is the one file allowed to
+# name it, because it offers to clean up leftovers from its own older versions.
+agents_dir=$(grep -rn 'docs/agents' --include='*.md' "${SCAN[@]}" 2>/dev/null \
+  | grep -v '^skills/engineering/setup-project-home/SKILL.md:')
+if [ -n "$agents_dir" ]; then
+  while IFS= read -r line; do report "retired docs/agents/ convention: $line"; done <<<"$agents_dir"
+fi
+
+# Behaviours the spec required verifying that no manifest can express. These are
+# assertions about the prose, which is where the behaviour actually lives.
+echo "Required behaviours are still specified"
+setup=skills/engineering/setup-project-home/SKILL.md
+way=skills/engineering/wayfinder/SKILL.md
+grep -q 'gh auth status' "$setup" && grep -q 'hasIssuesEnabled' "$setup" \
+  || report "$setup: preflight no longer checks auth and Issues capability"
+grep -q 'stop and say which' "$setup" \
+  || report "$setup: missing GitHub loud stop"
+grep -q 'write nothing' "$setup" \
+  || report "$setup: triage-off branch (write nothing) missing"
+grep -q 'Reconcile them against' "$setup" \
+  || report "$setup: triage-on branch (reconcile real labels) missing"
+grep -q 'stop and say which one' "$way" \
+  || report "$way: missing GitHub loud stop"
+grep -q "Blocked by: #<n>" "$way" && grep -q 'task list' "$way" \
+  || report "$way: in-GitHub degradation (task lists, Blocked by lines) missing"
+for s in to-spec to-tickets; do
+  grep -q "doesn't triage" "skills/engineering/$s/SKILL.md" \
+    || report "skills/engineering/$s/SKILL.md: no-triage label branch missing"
+done
 
 if [ "$fail" -eq 0 ]; then
   echo "All consistency checks passed."

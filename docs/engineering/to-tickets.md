@@ -24,7 +24,7 @@ Reach for it once you have an agreed plan or a written spec and you want it spli
 
 ## Prerequisites
 
-A GitHub repo you can reach — the tickets are published as issues on it. It applies the `ready-for-agent` label as it publishes, so if your repo triages under different label strings, [setup-project-home](https://aihero.dev/skills-setup-project-home) needs to have recorded that mapping first.
+A GitHub repo you can reach — the tickets are published as issues on it. If your repo triages, it applies your `ready-for-agent` label as it publishes, so [setup-project-home](https://aihero.dev/skills-setup-project-home) needs to have recorded your label strings first; if your repo doesn't triage, the tickets publish unlabelled.
 
 ## The blocking edges are the point
 

@@ -57,7 +57,7 @@ Iterate until the user approves the breakdown.
 
 ### 5. Publish the tickets as GitHub issues
 
-Publish one issue per ticket **in dependency order** (blockers first), so each ticket's blocking edges can reference real issue numbers. Use GitHub's native issue dependencies where the repo has them; where it doesn't, set each ticket's "Blocked by" to a `Blocked by: #<n>, #<n>` line at the top of the body. Apply the `ready-for-agent` triage label unless instructed otherwise — the tickets are agent-grabbable by construction.
+Publish one issue per ticket **in dependency order** (blockers first), so each ticket's blocking edges can reference real issue numbers. Use GitHub's native issue dependencies where the repo has them; where it doesn't, set each ticket's "Blocked by" to a `Blocked by: #<n>, #<n>` line at the top of the body. Where this repo has a triage vocabulary, apply its `ready-for-agent` label unless instructed otherwise — the tickets are agent-grabbable by construction. Where it doesn't triage, publish without a label and say so; don't fail the publish over a label that was never meant to exist, and don't create one.
 
 If there is no GitHub remote, `gh` is unauthenticated, or the repo has Issues disabled, stop and say which. Don't write the tickets to local files instead.
 

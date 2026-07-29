@@ -24,7 +24,7 @@ Reach for it once a change has been talked through and the domain language is se
 
 ## Prerequisites
 
-A GitHub repo you can reach — the spec is published as an issue on it. It applies the `ready-for-agent` label itself, so if your repo triages under different label strings, [setup-project-home](https://aihero.dev/skills-setup-project-home) needs to have recorded that mapping first. No separate triage pass is needed either way.
+A GitHub repo you can reach — the spec is published as an issue on it. If your repo triages, it applies your `ready-for-agent` label itself, so [setup-project-home](https://aihero.dev/skills-setup-project-home) needs to have recorded your label strings first; if your repo doesn't triage, it publishes unlabelled and tells you. No separate triage pass is needed either way.
 
 ## What the spec includes
 

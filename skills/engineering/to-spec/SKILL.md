@@ -16,7 +16,7 @@ The spec is published as a GitHub issue on this repo. The triage label vocabular
 
 Check with the user that these seams match their expectations.
 
-3. Write the spec using the template below, then publish it as a GitHub issue on this repo (`gh issue create`). Apply the `ready-for-agent` triage label - no need for additional triage. If there is no GitHub remote, `gh` is unauthenticated, or the repo has Issues disabled, stop and say which.
+3. Write the spec using the template below, then publish it as a GitHub issue on this repo (`gh issue create`). Where this repo has a triage vocabulary, apply its `ready-for-agent` label - no need for additional triage. Where it doesn't triage, publish without a label and say so; don't fail the publish over a label that was never meant to exist, and don't create one. If there is no GitHub remote, `gh` is unauthenticated, or the repo has Issues disabled, stop and say which.
 
 <spec-template>
 
