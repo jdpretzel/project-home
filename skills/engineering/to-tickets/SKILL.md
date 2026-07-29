@@ -1,6 +1,6 @@
 ---
 name: to-tickets
-description: Break a plan, spec, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges, published to the configured tracker — edges as text in one file per ticket locally, or native blocking links on a real tracker.
+description: Break a plan, spec, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges, published as GitHub issues — edges as native issue dependencies, or as Blocked by lines where the repo lacks them.
 disable-model-invocation: true
 ---
 
@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Break a plan, spec, or conversation into a set of **tickets** — tracer-bullet vertical slices, each declaring the tickets that **block** it.
 
-The issue tracker and triage label vocabulary should have been provided to you — run `/setup-project-home` if not.
+Tickets are published as GitHub issues on this repo. The triage label vocabulary should have been provided to you — run `/setup-project-home` if not.
 
 ## Process
 
@@ -55,37 +55,21 @@ Ask the user:
 
 Iterate until the user approves the breakdown.
 
-### 5. Publish the tickets to the configured tracker
+### 5. Publish the tickets as GitHub issues
 
-Publish the approved tickets. **How** depends on the tracker `/setup-project-home` configured — the tickets are the same either way, only the shape of the blocking edges changes:
+Publish one issue per ticket **in dependency order** (blockers first), so each ticket's blocking edges can reference real issue numbers. Use GitHub's native issue dependencies where the repo has them; where it doesn't, set each ticket's "Blocked by" to a `Blocked by: #<n>, #<n>` line at the top of the body. Apply the `ready-for-agent` triage label unless instructed otherwise — the tickets are agent-grabbable by construction.
 
-- **Local files** → write one file per ticket under `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01` in dependency order (blockers first). Each file's "Blocked by" lists the numbers/titles it depends on. Use the per-ticket file template below — one ticket per file, never a single combined file.
-- **A real issue tracker (GitHub, Linear, …)** → publish one issue per ticket in dependency order (blockers first) so each ticket's blocking edges can reference real identifiers. Use the platform's native blocking / sub-issue relationship where it has one; otherwise set each ticket's "Blocked by" to the blocking issues. Apply the `ready-for-agent` triage label unless instructed otherwise — the tickets are agent-grabbable by construction.
+If there is no GitHub remote, `gh` is unauthenticated, or the repo has Issues disabled, stop and say which. Don't write the tickets to local files instead.
 
 Work the **frontier**: any ticket whose blockers have all landed. For a purely linear chain that means top to bottom.
 
 Do NOT close or modify any parent issue.
 
-<local-ticket-template>
-
-# <NN> — <Ticket title>
-
-**What to build:** the end-to-end behaviour this ticket makes work, from the user's perspective — not a layer-by-layer implementation list.
-
-**Blocked by:** the numbers/titles of the tickets that gate this one, or "None — can start immediately".
-
-**Status:** ready-for-agent
-
-- [ ] Acceptance criterion 1
-- [ ] Acceptance criterion 2
-
-</local-ticket-template>
-
 <issue-template>
 
 ## Parent
 
-A reference to the parent issue on the tracker (if the source was an existing issue, otherwise omit this section).
+A reference to the parent issue on this repo (if the source was an existing issue, otherwise omit this section).
 
 ## What to build
 
