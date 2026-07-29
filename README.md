@@ -32,7 +32,7 @@ when you type them; model-invoked skills the agent can also reach on its own.
 - **[grill-with-docs](skills/engineering/grill-with-docs/SKILL.md)** — Grilling session that also builds your project's domain model, updating `CONTEXT.md` and ADRs inline.
 - **[triage](skills/engineering/triage/SKILL.md)** — Move issues through a state machine of triage roles.
 - **[improve-codebase-architecture](skills/engineering/improve-codebase-architecture/SKILL.md)** — Scan a codebase for deepening opportunities, presented as a visual HTML report.
-- **[setup-matt-pocock-skills](skills/engineering/setup-matt-pocock-skills/SKILL.md)** — Configure this repo for the engineering skills (issue tracker, triage labels, doc layout). Run once per repo.
+- **[setup-project-home](skills/engineering/setup-project-home/SKILL.md)** — Configure this repo for the engineering skills (issue tracker, triage labels, doc layout). Run once per repo.
 - **[to-spec](skills/engineering/to-spec/SKILL.md)** — Turn the current conversation into a spec and publish it to the issue tracker.
 - **[to-tickets](skills/engineering/to-tickets/SKILL.md)** — Break a plan or spec into tracer-bullet tickets, each declaring its blocking edges.
 - **[implement](skills/engineering/implement/SKILL.md)** — Build the work a spec or ticket describes, driving `/tdd` internally and closing with `/code-review`.
