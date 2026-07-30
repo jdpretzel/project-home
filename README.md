@@ -5,9 +5,10 @@ project begins. Pairs with
 [project-home-template](https://github.com/jdpretzel/project-home-template), the
 repo template that `/new-project` seeds new projects from.
 
-Carries the full skill set forked from upstream (see below) plus Project Home's
-own machinery — model routing defaults, the lexicon system, Codex integration,
-and the `/new-project` wrapper — as those land.
+Carries the full skill set forked from upstream (see below). Project Home's own
+additions — model routing defaults, the lexicon system, and the `/new-project`
+wrapper — are still to land. Every skill already carries Codex-side metadata
+(`agents/openai.yaml`); there is no separate Codex plugin.
 
 ## Install
 

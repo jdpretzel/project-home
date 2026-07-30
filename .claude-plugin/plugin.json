@@ -1,6 +1,6 @@
 {
   "name": "project-home",
-  "description": "Project Home: everything a new project needs from day one — Matt Pocock's engineering skills (forked from mattpocock/skills) plus model routing, lexicon, and Codex machinery.",
+  "description": "Project Home: Matt Pocock's engineering and productivity skills (forked from mattpocock/skills), adapted for a GitHub-tracked, review-gated development loop.",
   "author": {
     "name": "John Hetzel"
   },
