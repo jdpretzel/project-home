@@ -27,6 +27,10 @@ Run `scripts/check-consistency.sh` before opening a PR. Its scope is deliberatel
 
 ## Agent skills
 
+### Triage labels
+
+This repo does not triage: publish issues without triage labels.
+
 ### Domain docs
 
 ADRs live in `.agents/adr/`, not the default `docs/adr/`. The glossary is `CONTEXT.md` at the repo root, single-context.
