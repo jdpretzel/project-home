@@ -1,12 +1,12 @@
 ---
 name: to-spec
-description: Turn the current conversation into a spec and publish it to the project issue tracker — no interview, just synthesis of what you've already discussed.
+description: Turn the current conversation into a spec and publish it as a GitHub issue — no interview, just synthesis of what you've already discussed.
 disable-model-invocation: true
 ---
 
 This skill takes the current conversation context and codebase understanding and produces a spec (you may know this document as a PRD). Do NOT interview the user — just synthesize what you already know.
 
-The issue tracker and triage label vocabulary should have been provided to you — run `/setup-project-home` if not.
+The spec is published as a GitHub issue on this repo. Before anything else, read the root instructions (`CLAUDE.md` / `AGENTS.md`) — and only them: labels that happen to exist on the repo are not a recorded answer — for the `## Agent skills` → `### Triage labels` sub-block, which is in one of **three** states: a recorded label vocabulary, a recorded line that this repo doesn't triage, or no sub-block at all. A repo that doesn't triage is a supported case, not a misconfiguration — but that is the recorded "no", not the silence. Silence means `/setup-project-home` never ran, so the question is unanswered rather than answered no: stop here and tell the user to run it (it's user-invoked; don't run it yourself), *before* sketching seams or writing the spec — stopping first costs nothing, since the conversation keeps everything. Step 3 carries the label behaviour for the two recorded states.
 
 ## Process
 
@@ -16,7 +16,13 @@ The issue tracker and triage label vocabulary should have been provided to you �
 
 Check with the user that these seams match their expectations.
 
-3. Write the spec using the template below, then publish it to the project issue tracker. Apply the `ready-for-agent` triage label - no need for additional triage.
+3. Write the spec using the template below, then publish it as a GitHub issue on this repo (`gh issue create`). If there is no GitHub remote, `gh` is unauthenticated, or the repo has Issues disabled, stop and say which.
+
+   The label follows the three states, and reading two states where there are three is the whole trap:
+
+   - **A triage vocabulary is recorded** → apply its `ready-for-agent` label; no need for additional triage. If applying it fails because the label doesn't exist on the repo — setup records the mapping even when a `gh label create` failed, precisely so this error lands here with a name — the publish still goes through: issue first, label second. Report the missing label and hand over the `gh label create` and `gh issue edit --add-label` commands that finish the job; never create the label yourself.
+   - **A does-not-triage line is recorded** → publish without a label and say so; don't fail the publish over a label that was never meant to exist, and don't create one.
+   - **Neither is recorded** → the triage question is unanswered, not answered no. Stop before publishing and say `/setup-project-home` hasn't been run on this repo. Publishing unlabelled here is a guess dressed as a supported case: on a repo that does triage, the spec lands outside the queue that was supposed to pick it up, and nothing about the issue shows that anything went wrong.
 
 <spec-template>
 

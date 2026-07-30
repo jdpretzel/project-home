@@ -1,8 +1,8 @@
 # ADR Format
 
-ADRs live in `docs/adr/` and use sequential numbering: `0001-slug.md`, `0002-slug.md`, etc.
+ADRs use sequential numbering — `0001-slug.md`, `0002-slug.md`, etc. — and live in `docs/adr/` by default. Where the root instructions (`CLAUDE.md`/`AGENTS.md`) record an `## Agent skills` → `### Domain docs` path, that location supersedes the default everywhere below: read, write, and number there, or the repo ends up with two ADR sequences and readers of the recorded one miss the new decisions.
 
-Create the `docs/adr/` directory lazily — only when the first ADR is needed.
+Create the directory lazily — only when the first ADR is needed.
 
 ## Template
 
@@ -24,7 +24,7 @@ Only include these when they add genuine value. Most ADRs won't need them.
 
 ## Numbering
 
-Scan `docs/adr/` for the highest existing number and increment by one.
+Scan wherever this repo's ADRs actually live for the highest existing number and increment by one.
 
 ## When to offer an ADR
 

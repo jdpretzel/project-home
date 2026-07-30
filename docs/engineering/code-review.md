@@ -22,7 +22,7 @@ Reach for this when there is a diff to judge against a known-good point and you 
 
 ## Prerequisites
 
-The **Spec** axis needs somewhere to find the originating spec — an issue reference in the commit messages, a path you pass in, or a spec under `docs/`/`specs/`. That issue-tracker wiring comes from [setup-project-home](https://aihero.dev/skills-setup-project-home); without a spec the Spec axis simply skips and says so. The **Standards** axis needs nothing set up — it always carries a built-in Fowler smell baseline even in a repo that documents no conventions.
+The **Spec** axis needs somewhere to find the originating spec — an issue reference in the commit messages, a path you pass in, or a spec under `docs/`/`specs/`. An issue reference is fetched from the repo's GitHub issues, so it is only readable where the repo is reachable: a GitHub remote, `gh` authenticated, and Issues enabled. That is checked before the reference is trusted, and if a check fails the skill names which one — "`gh` is not authenticated, so I can't read #45" — and falls through to the next spec source rather than pretending the reference was never there. Having no spec and being unable to read the spec you have are different outcomes, and the report keeps them apart. The **Standards** axis needs nothing set up — it always carries a built-in Fowler smell baseline even in a repo that documents no conventions.
 
 ## Two axes, never merged
 
@@ -30,11 +30,14 @@ The defining idea is the **two axes**. **Standards** asks whether the diff confo
 
 They run as parallel sub-agents so neither pollutes the other's context, and the final report presents them under separate `## Standards` and `## Spec` headings with a per-axis summary. There is deliberately no single winner across axes.
 
+The Spec axis has three outcomes, not two, and you will see the difference in the report. **Found** — the spec is readable, so the axis runs. **Absent** — you have said there is no spec, so the axis skips and reports "no spec available". **Blocked** — a spec was identified but couldn't be read (an issue reference behind an unauthenticated `gh` or a repo with Issues disabled, a path you lack access to), so the axis skips and reports **"Spec axis blocked: `<what>` — `<why>`"**. Blocked is never folded into absent, because "no spec available" tells you the change had nothing to conform to, when in fact nobody checked.
+
 ## It's working if
 
 - It pins and confirms the fixed point first (`git rev-parse`), failing fast on a bad ref or empty diff rather than inside the sub-agents.
 - Standards and Spec findings arrive in two distinct blocks, each citing its source — a repo standard or baseline smell for one, a quoted spec line for the other.
 - When no spec can be found, the Spec axis reports "no spec available" instead of inventing requirements.
+- When a spec *was* identified but couldn't be read, you get "Spec axis blocked: `<what>` — `<why>`" and are told which prerequisite failed — never "no spec available", which would read as if there had been nothing to check against.
 
 ## Where it fits
 

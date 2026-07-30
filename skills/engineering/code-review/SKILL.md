@@ -10,8 +10,6 @@ Two-axis review of the diff between `HEAD` and a fixed point the user supplies:
 
 Both axes run as **parallel sub-agents** so they don't pollute each other's context, then this skill aggregates their findings.
 
-The issue tracker should have been provided to you — run `/setup-project-home` if `docs/agents/issue-tracker.md` is missing.
-
 ## Process
 
 ### 1. Pin the fixed point
@@ -26,10 +24,18 @@ Before going further, confirm the fixed point resolves (`git rev-parse <fixed-po
 
 Look for the originating spec, in this order:
 
-1. Issue references in the commit messages (`#123`, `Closes #45`, GitLab `!67`, etc.) — fetch via the workflow in `docs/agents/issue-tracker.md`.
+1. Issue references in the commit messages (`#123`, `Closes #45`, etc.) — fetch with `gh issue view <number> --comments`.
+
+   Before relying on that, confirm the repo is reachable: a GitHub remote (`git remote -v`), `gh auth status`, and Issues enabled (`gh repo view --json nameWithOwner,hasIssuesEnabled`). If one fails, **say which** — "`gh` is not authenticated, so I can't read #45" — and fall through to the next rung rather than treating the spec as absent. A reference that can't be fetched is an unreachable spec, not a missing one, and the difference matters: silently skipping to "no spec available" would report the Spec axis as inapplicable when it was merely blocked. Falling through is deliberately *not* the hard stop ADR 0003 prescribes for the tracker-backed skills — their deliverable lives on GitHub, this skill's deliverable is the review and GitHub is only one place a spec can come from. The loudness lands where the failure does: in the blocked-axis report, not by cancelling the Standards axis too.
 2. A path the user passed as an argument.
 3. A PRD/spec file under `docs/`, `specs/`, or `.scratch/` matching the branch name or feature.
 4. If nothing is found, ask the user where the spec is. If they say there isn't one, the **Spec** sub-agent will skip and report "no spec available".
+
+The spec source therefore ends in one of three states, and they are not interchangeable:
+
+- **Found** — run both axes.
+- **Absent** — the user says there is no spec. Skip the Spec sub-agent and report "no spec available".
+- **Blocked** — a spec was identified but couldn't be read (an unreachable issue reference, a path you lack access to). Skip the Spec sub-agent and report **"Spec axis blocked: `<what>` — `<why>`"**, never "no spec available". Reporting a blocked axis as absent tells the reader the change had nothing to conform to, when in fact nobody checked.
 
 ### 3. Identify the standards sources
 
@@ -71,7 +77,7 @@ Send a single message with two `Agent` tool calls. Use the `general-purpose` sub
 - The path or fetched contents of the spec.
 - The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. Under 400 words."
 
-If the spec is missing, skip the Spec sub-agent and note this in the final report.
+If the spec is absent or blocked, skip the Spec sub-agent and carry that state into the final report — distinguishing the two, per step 2.
 
 ### 5. Aggregate
 

@@ -12,7 +12,7 @@ Use /tdd where possible, at the seams the spec or tickets name. If something cou
 
 Run typechecking regularly, single test files regularly, and the full test suite once at the end.
 
-Once done, commit; where the work has a ticket, reference it in the commit message (on GitHub, `Closes #<n>`) — that reference is how /code-review finds the spec. The commit is the checkpoint that makes review possible: /code-review reads committed history, not the working tree.
+Once done, commit; where the work has a ticket, reference it in the commit message with `Closes #<n>` — that reference is how /code-review finds the spec. The commit is the checkpoint that makes review possible: /code-review reads committed history, not the working tree.
 
 Run /code-review with the branch's base as the fixed point — where the work has no ticket, name the spec too (its path, or this conversation) so the review never has to stop and ask — and address what it finds in narrow fix-up commits. If those fixes are substantive, re-run the full test suite and review again; if they're narrow, re-run the tests that cover them and record that verification.
 

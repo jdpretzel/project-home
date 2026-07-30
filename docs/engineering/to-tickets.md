@@ -12,7 +12,7 @@ npx skills update to-tickets
 
 ## What it does
 
-`to-tickets` breaks a plan, spec, or the current conversation into a set of **tickets** — each a tracer-bullet vertical slice — and publishes them to your configured tracker, with every ticket declaring the tickets that block it.
+`to-tickets` breaks a plan, spec, or the current conversation into a set of **tickets** — each a tracer-bullet vertical slice — and publishes them as GitHub issues, with every ticket declaring the tickets that block it.
 
 Every ticket is a **tracer bullet** — a thin *vertical* slice that cuts through all integration layers end-to-end (schema, API, UI, tests), never a horizontal slice of one layer. A completed slice is demoable or verifiable on its own, which is what makes each ticket safe to hand to an agent.
 
@@ -24,16 +24,15 @@ Reach for it once you have an agreed plan or a written spec and you want it spli
 
 ## Prerequisites
 
-`to-tickets` publishes into your issue tracker, so [setup-project-home](https://aihero.dev/skills-setup-project-home) must have configured the tracker and its triage label vocabulary for this repo first. On a real tracker it applies the ready-for-agent label as it publishes.
+A GitHub repo you can reach — the tickets are published as issues on it — and a [setup-project-home](https://aihero.dev/skills-setup-project-home) run on that repo. If you triage, setup is where your `ready-for-agent` label string comes from and the tickets get it as they publish; if you don't, setup records that too and the tickets publish unlabelled. With neither recorded, `to-tickets` stops before creating anything and names the setup skill, rather than reading *never set up* as *doesn't triage* and stranding a whole set of tickets outside your triage queue.
 
-## One artifact, two readings
+## The blocking edges are the point
 
-The blocking edges are the whole point. They make one set of tickets read two ways, depending on the tracker:
+One issue per ticket, published blockers-first so each edge can name a real issue number. Any ticket whose blockers have all landed is on the **frontier** and can be grabbed — which is what lets several agents run at once instead of one queue worked top to bottom.
 
-- **Local files** → one file per ticket under `.scratch/<feature>/issues/`, numbered blockers-first, the edges written as text. You work them top-to-bottom, by hand, staying in the loop.
-- **A real tracker (GitHub, Linear)** → one issue per ticket, the edges as native blocking links (or sub-issues). Any ticket whose blockers have all merged is on the **frontier** and can be grabbed — so several agents can run at once.
+The edges are recorded as GitHub's **native issue dependencies** where your repo has them, because that renders the frontier visually in GitHub's own UI. Where it doesn't, they become a `Blocked by: #<n>, #<n>` line at the top of each ticket body — the same information, just without the picture.
 
-The edges live in the ticket regardless of medium; the medium only decides whether anything acts on them in parallel. `to-tickets` produces the artifact — how you run it (sequential by hand, or a parallel fleet) is up to you.
+`to-tickets` produces the artifact; how you run it — sequentially by hand, or as a parallel fleet — is up to you.
 
 ## Vertical slices, not horizontal ones
 

@@ -1,116 +1,123 @@
 ---
 name: setup-project-home
-description: Configure this repo for the engineering skills — set up its issue tracker, triage label vocabulary, and domain doc layout. Run once before first use of the other engineering skills.
+description: Configure this repo for the engineering skills — verify GitHub access, record where the domain docs live if they're somewhere unusual, and set up triage labels if the repo uses them. Run once before first use of the other engineering skills.
 disable-model-invocation: true
 ---
 
 # Setup Project Home
 
-Scaffold the per-repo configuration that the engineering skills assume:
+Record the few things about *this* repo that the engineering skills can't work out for themselves:
 
-- **Issue tracker** — where issues live (GitHub by default; local markdown is also supported out of the box)
-- **Triage labels** — the strings used for the five canonical triage roles
-- **Domain docs** — where `CONTEXT.md` and ADRs live, and the consumer rules for reading them
+- **GitHub access** — that the skills can actually reach this repo's issues
+- **Domain doc paths** — only where `CONTEXT.md` or the ADRs aren't where skills already look
+- **Triage labels** — the real label strings where this repo uses `/triage`, and the recorded fact that it doesn't where it doesn't
+
+Everything else the skills carry themselves. **GitHub is the supported tracker**, so there is no tracker to choose, and no generic rules or command recipes get copied into your repo. On a repo with defaults everywhere, the one thing this skill still records is the answer to the triage question — and it records it whether that answer was yes or no, because absence has to keep meaning *setup never ran*. A recorded "no" is what stops every consumer from reading an unconfigured repo as one that doesn't triage.
 
 This is a prompt-driven skill, not a deterministic script. Explore, present what you found, confirm with the user, then write.
 
+**Re-running is safe.** It reads what's already there, shows a diff, and rewrites only the blocks it owns — leaving the rest of the file untouched.
+
 ## Process
 
-### 1. Explore
+### 1. Preflight — GitHub, or stop
 
-Look at the current repo to understand its starting state. Read whatever exists; don't assume:
+Confirm all three. If any one is missing, **stop and say which**. Do not offer another tracker, do not offer to keep issues in local files, and do not continue to the later sections — the engineering skills cannot function without this, and a repo that silently half-configures is worse than one that plainly refused.
 
-- `git remote -v` and `.git/config` — is this a GitHub repo? Which one?
-- `AGENTS.md` and `CLAUDE.md` at the repo root — does either exist? Is there already an `## Agent skills` section in either?
-- `CONTEXT.md` and `CONTEXT-MAP.md` at the repo root
-- `docs/adr/` and any `src/*/docs/adr/` directories
-- `docs/agents/` — does this skill's prior output already exist?
-- `.scratch/` — sign that a local-markdown issue tracker convention is already in use
-- Is the `triage` skill installed? (a `triage` skill folder alongside this one, or `triage` in your available skills.) This decides whether Section B runs at all.
-- Monorepo signals — a `pnpm-workspace.yaml`, a `workspaces` field in `package.json`, or a populated `packages/*` with its own `src/`. Present only in a genuinely large multi-package repo; their absence means single-context, which is almost every repo.
+- **A GitHub remote** — `git remote -v`. No remote, or a non-GitHub host, is a stop.
+- **Authentication** — `gh auth status`.
+- **Issues enabled** — `gh repo view --json nameWithOwner,hasIssuesEnabled`.
 
-### 2. Present findings and ask
+Report the resolved `owner/repo` so the user can see exactly which repo they configured — and take that name from the **remote**, not from `gh`. `gh repo view` answers from its own configuration and will hand back a plausible `owner/repo` even in a directory with no remote at all, or one whose remote points at GitLab. Trusting it there configures the skills against a repo the user has never seen. On the stop path there is no resolved repo to report, and saying so is the point.
 
-Summarise what's present and what's missing. Then take the sections in order — one section, one answer, then the next.
+### 2. Explore
 
-Lead each section with the recommended answer so the user can accept it in a word. Give a one-line explainer only when the choice genuinely branches; skip the section entirely when exploration already settled it (Section B when `triage` isn't installed, Section C when there's no monorepo).
+Read what exists; don't assume:
 
-**Section A — Issue tracker.**
+- `CLAUDE.md` and `AGENTS.md` at the root — which exist, is either a **symlink** to the other, and is there already an `## Agent skills` section?
+- `CONTEXT.md` and `CONTEXT-MAP.md`, at the root or elsewhere
+- ADR directories — `docs/adr/`, `src/*/docs/adr/`, or somewhere else entirely
+- `gh label list --limit 500` — what label vocabulary already exists. The limit matters: the bare command returns at most 30 labels, and a triage label hiding past that cutoff reads as missing, so setup would offer to create a duplicate or record a wrong mapping.
+- Monorepo signals — a `pnpm-workspace.yaml`, a `workspaces` field in `package.json`, or a populated `packages/*` with its own `src/`. Absent means single-context, which is almost every repo.
+- A leftover `docs/agents/` directory — output from an older version of this skill. Its `issue-tracker.md` is obsolete: the tracker is no longer configurable, so nothing reads that file. Offer to delete it; don't delete without asking.
 
-> Explainer: The "issue tracker" is where issues live for this repo. Skills like `to-tickets`, `triage`, `to-spec`, and `qa` read from and write to it — they need to know whether to call `gh issue create`, write a markdown file under `.scratch/`, or follow some other workflow you describe. Pick the place you actually track work for this repo.
+### 3. Present findings and ask
 
-Default posture: these skills were designed for GitHub. If a `git remote` points at GitHub, propose that. If a `git remote` points at GitLab (`gitlab.com` or a self-hosted host), propose GitLab. Otherwise (or if the user prefers), offer:
+Summarise what's present and what's missing, then take the two sections in order — one section, one answer, then the next. Lead each with the recommended answer so it can be accepted in a word, and skip a section outright when exploration already settled it.
 
-- **GitHub** — issues live in the repo's GitHub Issues (uses the `gh` CLI)
-- **GitLab** — issues live in the repo's GitLab Issues (uses the [`glab`](https://gitlab.com/gitlab-org/cli) CLI)
-- **Local markdown** — issues live as files under `.scratch/<feature>/` in this repo (good for solo projects or repos without a remote)
-- **Other** (Jira, Linear, etc.) — ask the user to describe the workflow in one paragraph; the skill will record it as freeform prose
+**Section A — Does this repo use `/triage`?**
 
-Record the choice in `docs/agents/issue-tracker.md`. The GitHub and GitLab templates carry a "PRs as a request surface" flag, defaulted **off** — leave it off and don't raise it; a user who wants external PRs in the triage queue can flip the flag in the file later.
+> Do you triage incoming issues on this repo? (recommended: **no**, unless you already have a triage habit)
 
-**Section B — Triage label vocabulary.** Skip this section entirely if the `triage` skill isn't installed (exploration told you) — an uninstalled skill needs no labels.
+Ask about *use*, never about whether the skill is installed: `triage` ships in this same plugin, so "installed" is true in every repo and gates nothing.
 
-If it is installed, ask exactly one question:
+On **no** — create no labels, but still record the answer, as one line in a fixed shape:
 
-> Do you want to keep the default triage labels? (recommended: **yes**)
+> This repo does not triage: publish issues without triage labels.
 
-The defaults are the five canonical roles, each label string equal to its name: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. On **yes**, write them as-is. Only if the user says no — usually because their tracker already uses other names (e.g. `bug:triage` for `needs-triage`) — collect the overrides so `triage` applies existing labels instead of creating duplicates.
+Recording a "no" looks redundant and isn't: a repo that was asked and answered no has to stay distinguishable from a repo nobody ever asked. Leave it unwritten and every consumer reads *unconfigured* as *triage-off*, publishing unlabelled into a repo that may well triage — the silent fallback this whole design exists to kill, arriving by a new route. The shape is fixed for the same reason the mapping line below is: a re-run with an unchanged answer regenerates identical text rather than a fresh paraphrase. What "no" does still buy is no label vocabulary — nothing manufactured, nothing to go stale.
 
-**Section C — Domain docs.** Default to **single-context** — one `CONTEXT.md` + `docs/adr/` at the repo root. This fits almost every repo; write it without asking.
+On **yes** — the five canonical roles are `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. Reconcile them against what `gh label list` returned:
 
-Offer **multi-context** — a root `CONTEXT-MAP.md` pointing to per-context `CONTEXT.md` files — only when exploration found monorepo signals. Then confirm which layout they want.
+- Already present under those names → record the mapping as identity.
+- The repo uses its own strings for the same roles (`bug:triage` for `needs-triage`) → record that mapping, so `/triage` applies the labels that exist rather than creating duplicates.
+- A role with no label at all → offer `gh label create`. Ask first; never create labels silently. If a create **fails** — a permissions error is the usual cause — record the mapping anyway, say which labels don't exist yet, and hand the user the exact `gh label create` commands that finish the job once someone with permission runs them. This is not the half-configuration ADR 0003 forbids: that rule is about proceeding without GitHub or letting partial state read as something else silently, and both alternatives here would commit exactly that sin — dropping the role writes a mapping that silently lacks it, and abandoning the run leaves every skill guessing. A complete recorded answer with a loudly named gap is the opposite: consumers that hit the missing label report one clear error naming it, instead of failing somewhere unexplained. Don't treat the failure as a reason to re-ask the triage question.
 
-### 3. Confirm and edit
+Record the outcome in exactly this shape, so that re-running with unchanged answers regenerates identical text rather than a fresh paraphrase:
 
-Show the user a draft of:
+> Triage roles map to labels: `needs-triage` → `<label>`, `needs-info` → `<label>`, `ready-for-agent` → `<label>`, `ready-for-human` → `<label>`, `wontfix` → `<label>`. External pull requests: in scope / not in scope.
 
-- The `## Agent skills` block to add to whichever of `CLAUDE.md` / `AGENTS.md` is being edited (see step 4 for selection rules)
-- The contents of `docs/agents/issue-tracker.md`, `docs/agents/domain.md`, and `docs/agents/triage-labels.md` (the last only when `triage` is installed)
+Write every role on one line, using the canonical name on both sides where the repo hasn't renamed it. It is repetitive on purpose: a fixed shape is what makes the re-run diff show real changes instead of two models' prose styles. For this line and the does-not-triage line above, the `>` is this document quoting the shape, not part of it — what lands in the file is the plain line. And where the regenerated sub-block already matches what's on disk byte for byte, say so and write nothing: an unconditional rewrite is where stray formatting drift would creep in.
 
-Let them edit before writing.
+Ask one follow-up here and only here: **do external pull requests count as requests to triage?** Default **no**. On yes, `/triage` pulls external PRs into its queue alongside issues.
 
-### 4. Write
+**Section B — Domain doc paths.**
 
-**Pick the file to edit:**
+The skills already look for `CONTEXT.md` at the repo root and ADRs under `docs/adr/`. Where that's what this repo does, **write nothing** — a default that gets restated is just another thing to keep in sync.
 
-- If `CLAUDE.md` exists, edit it.
-- Else if `AGENTS.md` exists, edit it.
-- If neither exists, ask the user which one to create — don't pick for them.
+Record a path only where this repo actually differs: ADRs somewhere else, a `CONTEXT-MAP.md` pointing at per-context files, or context docs nested under `src/<context>/`.
 
-Never create `AGENTS.md` when `CLAUDE.md` already exists (or vice versa) — always edit the one that's already there.
+Offer the multi-context layout only when exploration found monorepo signals.
 
-If an `## Agent skills` block already exists in the chosen file, update its contents in-place rather than appending a duplicate. Don't overwrite user edits to the surrounding sections.
+### 4. Confirm
 
-The block:
+Show the exact block about to be written and the file it lands in — files, plural, where step 5 resolves to two independent root instruction files. Where a block already exists, show it as a **diff** against what's there rather than as a fresh insertion, so a re-run makes its changes obvious. Let the user edit before anything is written.
+
+Section B can come back with nothing to record; Section A never does, because "no" is itself the answer it records. So there is always a block to confirm, even when it's a heading and one line — say as much rather than dressing a minimal block up as a bigger result.
+
+### 5. Write
+
+**Pick the file:**
+
+- **Where one is a symlink to the other, edit the target once.** They are the same file; writing "both" writes it twice and can double the block.
+- **Where `CLAUDE.md` and `AGENTS.md` both exist as independent files, write the block to both, identically.** An agent whose harness reads only `AGENTS.md` never sees `CLAUDE.md`, so a single-file write is config that half the agents working this repo cannot find — they re-run setup, or act on the defaults the user just overruled.
+- If only one exists, edit it. If neither exists, ask which to create — don't pick for them.
+- Never create `AGENTS.md` when `CLAUDE.md` already exists, or vice versa. A second root instruction file is a divergence waiting to happen, and this skill shouldn't be what starts one.
+
+The block — `### Triage labels` always, `### Domain docs` only where it earned a place:
 
 ```markdown
 ## Agent skills
 
-### Issue tracker
-
-[one-line summary of where issues are tracked]. See `docs/agents/issue-tracker.md`.
-
 ### Triage labels
 
-[one-line summary of the label vocabulary]. See `docs/agents/triage-labels.md`.
+[the mapping in one line and whether external PRs are in scope, or the does-not-triage line]
 
 ### Domain docs
 
-[one-line summary of layout — "single-context" or "multi-context"]. See `docs/agents/domain.md`.
+[only the paths that differ from the defaults]
 ```
 
-Include the `### Triage labels` sub-block, and write `docs/agents/triage-labels.md`, only when `triage` is installed and Section B ran. When it isn't, both are omitted.
+Three rules make re-runs safe:
 
-Then write the docs files using the seed templates in this skill folder as a starting point:
+- An existing `## Agent skills` section is **updated in place**, sub-block by sub-block. Never append a second one.
+- A sub-block whose section answered "nothing nonstandard" is **omitted** — and **removed** if an earlier run wrote one. That is **Domain docs** only: under `### Triage labels`, "no" is a recorded answer rather than an absence, so that sub-block is written either way and never removed.
+- Everything outside the sub-blocks this skill owns is left exactly as found. User edits to surrounding sections survive a re-run untouched. Inside a sub-block the recorded **answers** are authoritative and get rewritten from the fixed shape above — so if a hand-edited line disagrees with them, show that as the diff and let the user decide, rather than silently preserving or silently overwriting it.
 
-- [issue-tracker-github.md](./issue-tracker-github.md) — GitHub issue tracker
-- [issue-tracker-gitlab.md](./issue-tracker-gitlab.md) — GitLab issue tracker
-- [issue-tracker-local.md](./issue-tracker-local.md) — local-markdown issue tracker
-- [triage-labels.md](./triage-labels.md) — label mapping (only if `triage` is installed)
-- [domain.md](./domain.md) — domain doc consumer rules + layout
+All three apply **per file**: with two independent root files, each is brought into line with the recorded answers on its own. Where their owned blocks have drifted apart, the recorded answers are still what wins — show the drift as a diff and let the user decide, exactly as with a hand-edited line.
 
-For "other" issue trackers, write `docs/agents/issue-tracker.md` from scratch using the user's description.
+`### Triage labels` is always present, so an empty `## Agent skills` heading is never a correct result — remove one a previous run left behind.
 
-### 5. Done
+### 6. Done
 
-Tell the user the setup is complete and which engineering skills will now read from these files. Mention they can edit `docs/agents/*.md` directly later — re-running this skill is only necessary if they want to switch issue trackers or restart from scratch.
+Say what was written and to which file or files — there is always at least the triage line. Name which engineering skills read it. Mention that these are ordinary lines in the root instructions, editable by hand — re-run this skill only to start over or to change one of the answers. Where you wrote two files, say that both now carry the same block and that hand-editing one alone will make them disagree.

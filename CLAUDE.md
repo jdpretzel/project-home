@@ -22,3 +22,11 @@ Every `SKILL.md` is either user-invoked (`disable-model-invocation: true` plus `
 [`ask-matt`](./skills/engineering/ask-matt/SKILL.md) is the router that maps every user-reachable skill and how they relate. The same trigger that re-syncs a docs page applies to it: whenever you add, rename, remove, or change how a user-reachable skill fits the flows, re-read `ask-matt`'s `SKILL.md` and update it so the map stays accurate — a new skill it never mentions, or a stale one it still routes to, is a router that lies.
 
 To (re)link every skill into the local harness skill directories (`~/.claude/skills`, `~/.agents/skills`), run `scripts/link-skills.sh`. Each entry is a symlink into this repo, so a `git pull` keeps installed skills current; re-run the script after adding, removing, or renaming a skill.
+
+Run `scripts/check-consistency.sh` before opening a PR. Its scope is deliberately narrow — the tracker invariants from [.agents/adr/0003-github-is-the-supported-tracker.md](./.agents/adr/0003-github-is-the-supported-tracker.md): references to the retired tracker abstraction, and the behaviours that decision requires (the GitHub hard stop, both triage branches, the in-GitHub degradation). It is **prose lint, not behavioural proof** — it greps text, so it can tell you a skill still *says* the right thing, never that a skill still *does* it. Broader enforcement of the README / `plugin.json` / router rules above is deliberately not here; that mechanism is [The router and system legibility](https://github.com/jdpretzel/project-home/issues/13)'s decision to make. Not a substitute for `claude plugin validate .` — run both.
+
+## Agent skills
+
+### Domain docs
+
+ADRs live in `.agents/adr/`, not the default `docs/adr/`. The glossary is `CONTEXT.md` at the repo root, single-context.

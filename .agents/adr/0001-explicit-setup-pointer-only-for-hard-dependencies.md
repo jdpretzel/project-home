@@ -8,3 +8,9 @@ We split these into **hard-dependency** and **soft-dependency** skills:
 - **Soft dependency** (`diagnose`, `tdd`, `improve-codebase-architecture`) — reference "the project's domain glossary" and "ADRs in the area you're touching" in vague prose only. If the docs aren't there, the skill still works; output is just less sharp.
 
 The split keeps soft-dependency skills token-light and avoids cargo-culting the setup pointer into places where it isn't load-bearing.
+
+## Superseded in part by [ADR 0003](./0003-github-is-the-supported-tracker.md)
+
+The **issue tracker** is no longer per-repo config: GitHub is the supported tracker, each skill carries its own GitHub behaviour, and `docs/agents/` no longer exists. So the tracker half of the hard-dependency case is gone — `wayfinder`, `to-spec`, `to-tickets`, and `code-review` no longer need the pointer for it, and a missing GitHub repo is now a loud stop rather than something setup must have pre-supplied.
+
+What survives, and what this ADR still governs: **triage label vocabulary** remains genuinely per-repo, so `triage`, `to-spec`, and `to-tickets` keep the explicit pointer for that. Domain docs remain a soft dependency, referenced in vague prose. The reasoning — an explicit pointer only where output would be *wrong* rather than merely fuzzy — is unchanged; only the list of things that qualify has shrunk.
