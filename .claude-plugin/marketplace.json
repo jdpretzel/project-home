@@ -8,7 +8,7 @@
     {
       "name": "project-home",
       "source": "./",
-      "description": "Everything a new project needs from day one — Matt Pocock's engineering skills (forked) plus model routing, lexicon, and Codex machinery.",
+      "description": "Matt Pocock's engineering and productivity skills (forked), adapted for a GitHub-tracked, review-gated development loop.",
       "category": "engineering",
       "keywords": [
         "engineering",
