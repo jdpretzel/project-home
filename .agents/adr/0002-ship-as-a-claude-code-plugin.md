@@ -35,7 +35,7 @@ The only robust ways to give Codex a single promoted-only path are (a) **restruc
 
 Basis, stated precisely because the sources disagree: this is read from the **shipped loader**. OpenAI's published plugin docs still document `skills` as a single string, and #28790's own description claims declared roots load *alongside* the default root — which the loader contradicts. Where they conflict the loader governs, and anyone acting on this should re-read it rather than trust this paragraph: the surface is moving weekly.
 
-**Why the deferral survives anyway.** Not for the reason given above. The manifest change removes the *capability* blocker; what remains is need. **Operator ruling, 2026-07-30** (recorded on [#8](https://github.com/jdpretzel/project-home/issues/8) in the same change-set as this amendment): no Codex plugin is built or shipped — this fork serves one operator, who reproduces the environment by cloning the repo rather than installing it, so there are no installers to serve.
+**Why the deferral survives anyway.** Not for the reason given above. The manifest change removes the *capability* blocker; what remains is need. **Operator ruling, 2026-07-30**: no Codex plugin is built or shipped — this fork serves one operator, who reproduces the environment by cloning the repo rather than installing it, so there are no Codex installers to serve.
 
 The trigger is therefore need-shaped, replacing the capability-shaped one below: **build the Codex plugin when the operator's own work requires it.** What that would take has not been measured and should not be assumed small — the array route is untested here, and no `.codex-plugin/` manifest has been written.
 

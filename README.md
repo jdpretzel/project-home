@@ -7,8 +7,10 @@ repo template that `/new-project` seeds new projects from.
 
 Carries the full skill set forked from upstream (see below). Project Home's own
 additions — model routing defaults, the lexicon system, and the `/new-project`
-wrapper — are still to land. Every skill already carries Codex-side metadata
-(`agents/openai.yaml`); there is no separate Codex plugin.
+wrapper — are still to land. Every skill carries Codex-side metadata
+(`agents/openai.yaml`), but `~/.claude/plugins/` is not a path Codex reads:
+installing this plugin delivers nothing to Codex, and there is no separate Codex
+plugin.
 
 ## Install
 
