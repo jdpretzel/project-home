@@ -31,7 +31,7 @@ when you type them; model-invoked skills the agent can also reach on its own.
 
 ### User-invoked
 
-- **[ask-matt](skills/engineering/ask-matt/SKILL.md)** — Ask which skill or flow fits your situation; the router over the user-invoked set.
+- **[ask-matt](skills/engineering/ask-matt/SKILL.md)** — Ask which skill or flow fits your situation; a guide to the main skill flows in this repo.
 - **[grill-with-docs](skills/engineering/grill-with-docs/SKILL.md)** — Grilling session that also builds your project's domain model, updating `CONTEXT.md` and ADRs inline.
 - **[triage](skills/engineering/triage/SKILL.md)** — Move issues through a state machine of triage roles.
 - **[improve-codebase-architecture](skills/engineering/improve-codebase-architecture/SKILL.md)** — Scan a codebase for deepening opportunities, presented as a visual HTML report.
