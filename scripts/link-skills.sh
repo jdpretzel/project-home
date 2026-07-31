@@ -24,13 +24,32 @@ resolve_for_comparison() {
   local base
   local parent
   local resolved
+  local target
+  local hops=0
 
-  while [ ! -e "$candidate" ] && [ ! -L "$candidate" ]; do
-    base="$(basename "$candidate")"
-    parent="$(dirname "$candidate")"
-    [ "$parent" != "$candidate" ] || return 1
-    suffix="/$base$suffix"
-    candidate="$parent"
+  while :; do
+    while [ ! -e "$candidate" ] && [ ! -L "$candidate" ]; do
+      base="$(basename "$candidate")"
+      parent="$(dirname "$candidate")"
+      [ "$parent" != "$candidate" ] || return 1
+      suffix="/$base$suffix"
+      candidate="$parent"
+    done
+
+    # A dangling symlink cannot be resolved by `cd`/`pwd -P`, so follow it
+    # by hand; otherwise the containment check below would judge the
+    # symlink's own path instead of where its chain actually leads.
+    if [ -L "$candidate" ] && [ ! -e "$candidate" ]; then
+      hops=$((hops + 1))
+      [ "$hops" -le 40 ] || return 1
+      target="$(readlink "$candidate")" || return 1
+      case "$target" in
+        /*) candidate="$target" ;;
+        *) candidate="$(dirname "$candidate")/$target" ;;
+      esac
+      continue
+    fi
+    break
   done
 
   if [ -d "$candidate" ]; then

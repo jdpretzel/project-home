@@ -71,6 +71,12 @@ test_prunes_links_after_rename_or_removal() {
   mv \
     "$fixture/repo/skills/engineering/retired" \
     "$fixture/retired-skill"
+  ln -s \
+    "$fixture/repo/skills/engineering/removed" \
+    "$fixture/repo/skills/inner-redirect"
+  ln -s \
+    "$fixture/repo/skills/inner-redirect" \
+    "$fixture/home/.agents/skills/chained-removed"
   run_linker "$fixture"
 
   for harness in .claude .agents; do
@@ -80,6 +86,7 @@ test_prunes_links_after_rename_or_removal() {
       "$fixture/home/$harness/skills/beta" \
       "$fixture/repo/skills/engineering/beta"
   done
+  assert_absent "$fixture/home/.agents/skills/chained-removed"
 }
 
 test_preserves_unrelated_skills() {
@@ -103,6 +110,12 @@ test_preserves_unrelated_skills() {
   ln -s \
     "$fixture/repo/skills/outside-redirect/missing-skill" \
     "$fixture/home/.agents/skills/repo-prefixed-but-outside"
+  ln -s \
+    "$fixture/outside/never-existed" \
+    "$fixture/repo/skills/dangling-redirect"
+  ln -s \
+    "$fixture/repo/skills/dangling-redirect" \
+    "$fixture/home/.agents/skills/repo-dangling-then-outside"
 
   if run_linker "$fixture"; then
     fail "linker succeeded despite conflicting unrelated skills"
@@ -119,6 +132,9 @@ test_preserves_unrelated_skills() {
   assert_link_to \
     "$fixture/home/.agents/skills/repo-prefixed-but-outside" \
     "$fixture/repo/skills/outside-redirect/missing-skill"
+  assert_link_to \
+    "$fixture/home/.agents/skills/repo-dangling-then-outside" \
+    "$fixture/repo/skills/dangling-redirect"
 }
 
 test_adds_new_skills
