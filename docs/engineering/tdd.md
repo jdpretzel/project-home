@@ -30,6 +30,8 @@ Two rules keep the tests honest. A good test reads like a specification ("user c
 
 Refactoring only happens once the suite is green; never while red.
 
+Where the repo provides a lifecycle entry — a script like `scripts/agent-lifecycle.sh` that starts work from a fresh-fetched base — the loop runs in a worktree it started, before the first red test touches a file. The primary checkout is never where the red-green cycling happens.
+
 ## It's working if
 
 - It writes one test, gets it passing, and only then writes the next — not a batch of tests followed by a batch of code.

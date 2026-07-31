@@ -16,9 +16,9 @@ Both axes run as **parallel sub-agents** so they don't pollute each other's cont
 
 Whatever the user said is the fixed point — a commit SHA, branch name, tag, `main`, `HEAD~5`, etc. If they didn't specify one, ask for it.
 
-Capture the diff command once: `git diff <fixed-point>...HEAD` (three-dot, so the comparison is against the merge-base). Also note the list of commits via `git log <fixed-point>..HEAD --oneline`.
+Resolve it to an immutable range **once**: `base=$(git rev-parse <fixed-point>)` and `head=$(git rev-parse HEAD)`. A branch name is mutable — if the base moves or new commits land mid-review, a name-based diff silently reviews something else. Capture the diff command with the resolved SHAs: `git diff <base>...<head>` (three-dot, so the comparison is against the merge-base). Also note the list of commits via `git log <base>..<head> --oneline`.
 
-Before going further, confirm the fixed point resolves (`git rev-parse <fixed-point>`) and the diff is non-empty. A bad ref or empty diff should fail here — not inside two parallel sub-agents.
+Before going further, confirm the fixed point resolved and the diff is non-empty — a bad ref or empty diff should fail here, not inside two parallel sub-agents. Also run `git status --porcelain`: dirty or untracked files are invisible to a committed-range diff, so if any exist, list them in the final report as **outside the reviewed range** — otherwise "review passed" quietly claims more than was reviewed. At aggregation time, confirm `git rev-parse HEAD` still equals `<head>`; if it moved, the review covered a stale range — say so and re-run.
 
 ### 2. Identify the spec source
 

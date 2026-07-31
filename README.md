@@ -38,7 +38,7 @@ when you type them; model-invoked skills the agent can also reach on its own.
 - **[setup-project-home](skills/engineering/setup-project-home/SKILL.md)** — Configure this repo for the engineering skills: verify GitHub access, triage labels if you use them, unusual doc paths. Run once per repo.
 - **[to-spec](skills/engineering/to-spec/SKILL.md)** — Turn the current conversation into a spec and publish it as a GitHub issue.
 - **[to-tickets](skills/engineering/to-tickets/SKILL.md)** — Break a plan or spec into tracer-bullet tickets, each declaring its blocking edges.
-- **[implement](skills/engineering/implement/SKILL.md)** — Build the work a spec or ticket describes, driving `/tdd` internally, then committing, running `/code-review` against that commit, and opening a PR.
+- **[implement](skills/engineering/implement/SKILL.md)** — Build the work a spec or ticket describes, driving `/tdd` internally, then committing, running `/code-review` against that commit, and opening a draft PR.
 - **[wayfinder](skills/engineering/wayfinder/SKILL.md)** — Plan a huge chunk of work as a shared map of decision tickets, resolved one at a time until the way is clear.
 - **[grill-me](skills/productivity/grill-me/SKILL.md)** — Get relentlessly interviewed about a plan or design until every branch of the decision tree is resolved.
 - **[handoff](skills/productivity/handoff/SKILL.md)** — Compact the current conversation into a handoff document so another agent can continue the work.

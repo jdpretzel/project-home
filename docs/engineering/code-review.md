@@ -32,9 +32,17 @@ They run as parallel sub-agents so neither pollutes the other's context, and the
 
 The Spec axis has three outcomes, not two, and you will see the difference in the report. **Found** — the spec is readable, so the axis runs. **Absent** — you have said there is no spec, so the axis skips and reports "no spec available". **Blocked** — a spec was identified but couldn't be read (an issue reference behind an unauthenticated `gh` or a repo with Issues disabled, a path you lack access to), so the axis skips and reports **"Spec axis blocked: `<what>` — `<why>`"**. Blocked is never folded into absent, because "no spec available" tells you the change had nothing to conform to, when in fact nobody checked.
 
+## The reviewed range is pinned
+
+A branch name is not a range. `main` today and `main` an hour from now can name different commits, so a review that diffs against a name can quietly end up judging something other than what it reported on. `code-review` resolves both ends to **immutable SHAs once**, up front — the fixed point and `HEAD` — and every later step uses those, so the range can't drift mid-review while two sub-agents are running.
+
+The same honesty applies to what the range can't see. A committed-range diff shows nothing of your dirty or untracked files, so those are listed in the report as **outside the reviewed range**: otherwise "review passed" would quietly claim more than was reviewed. And when the findings are assembled, `HEAD` is checked once more against the SHA the review started from — if commits landed in the meantime, the review covered a stale range, and it says so and asks to be re-run rather than reporting on a snapshot that no longer exists.
+
 ## It's working if
 
-- It pins and confirms the fixed point first (`git rev-parse`), failing fast on a bad ref or empty diff rather than inside the sub-agents.
+- It resolves the fixed point and `HEAD` to SHAs first and diffs those, failing fast on a bad ref or empty diff rather than inside the sub-agents.
+- Dirty or untracked files are named in the report as outside the reviewed range, rather than passing unmentioned.
+- If `HEAD` moved while the review ran, you're told the range went stale instead of being handed the findings anyway.
 - Standards and Spec findings arrive in two distinct blocks, each citing its source — a repo standard or baseline smell for one, a quoted spec line for the other.
 - When no spec can be found, the Spec axis reports "no spec available" instead of inventing requirements.
 - When a spec *was* identified but couldn't be read, you get "Spec axis blocked: `<what>` — `<why>`" and are told which prerequisite failed — never "no spec available", which would read as if there had been nothing to check against.
