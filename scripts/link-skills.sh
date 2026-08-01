@@ -15,6 +15,25 @@ set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd -P)"
 DESTS=("$HOME/.claude/skills" "$HOME/.agents/skills")
 
+# Collapse `.` and `..` segments lexically. Only safe on a path whose existing
+# prefix is already physical (`pwd -P`): with no symlinks left, the lexical
+# parent and the real parent agree.
+normalize_lexically() {
+  local rest="$1/"
+  local out=""
+  local seg
+  while [ -n "$rest" ]; do
+    seg="${rest%%/*}"
+    rest="${rest#*/}"
+    case "$seg" in
+      ''|'.') ;;
+      '..') out="${out%/*}" ;;
+      *) out="$out/$seg" ;;
+    esac
+  done
+  printf '%s\n' "${out:-/}"
+}
+
 # Resolve a path for ownership checks even when its final components no longer
 # exist. Existing ancestors are resolved physically so a symlink inside the
 # repo that leads elsewhere is not mistaken for a repo-owned target.
@@ -36,10 +55,11 @@ resolve_for_comparison() {
       candidate="$parent"
     done
 
-    # A dangling symlink cannot be resolved by `cd`/`pwd -P`, so follow it
-    # by hand; otherwise the containment check below would judge the
-    # symlink's own path instead of where its chain actually leads.
-    if [ -L "$candidate" ] && [ ! -e "$candidate" ]; then
+    # `cd`/`pwd -P` only resolves directories, so follow a symlink final
+    # component — dangling or not — by hand; otherwise the containment
+    # check below would judge the symlink's own path instead of where its
+    # chain actually leads.
+    if [ -L "$candidate" ]; then
       hops=$((hops + 1))
       [ "$hops" -le 40 ] || return 1
       target="$(readlink "$candidate")" || return 1
@@ -54,13 +74,13 @@ resolve_for_comparison() {
 
   if [ -d "$candidate" ]; then
     resolved="$(cd "$candidate" 2>/dev/null && pwd -P)" || return 1
-    printf '%s%s\n' "$resolved" "$suffix"
+    normalize_lexically "$resolved$suffix"
     return
   fi
 
   parent="$(dirname "$candidate")"
   resolved="$(cd "$parent" 2>/dev/null && pwd -P)" || return 1
-  printf '%s/%s%s\n' "$resolved" "$(basename "$candidate")" "$suffix"
+  normalize_lexically "$resolved/$(basename "$candidate")$suffix"
 }
 
 link_points_into_repo() {

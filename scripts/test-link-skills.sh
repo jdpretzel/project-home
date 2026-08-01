@@ -77,6 +77,9 @@ test_prunes_links_after_rename_or_removal() {
   ln -s \
     "$fixture/repo/skills/inner-redirect" \
     "$fixture/home/.agents/skills/chained-removed"
+  ln -s \
+    "$fixture/repo/skills/engineering/missing/../gone" \
+    "$fixture/home/.agents/skills/dot-segments-inside"
   run_linker "$fixture"
 
   for harness in .claude .agents; do
@@ -87,11 +90,13 @@ test_prunes_links_after_rename_or_removal() {
       "$fixture/repo/skills/engineering/beta"
   done
   assert_absent "$fixture/home/.agents/skills/chained-removed"
+  assert_absent "$fixture/home/.agents/skills/dot-segments-inside"
 }
 
 test_preserves_unrelated_skills() {
   new_fixture preservation
   add_skill "$fixture" alpha
+  add_skill "$fixture" bravo
 
   mkdir -p \
     "$fixture/home/.claude/skills/alpha" \
@@ -116,6 +121,16 @@ test_preserves_unrelated_skills() {
   ln -s \
     "$fixture/repo/skills/dangling-redirect" \
     "$fixture/home/.agents/skills/repo-dangling-then-outside"
+  ln -s \
+    "$fixture/repo/skills/missing/../../../outside/never-created" \
+    "$fixture/home/.agents/skills/dot-segments-outside"
+  printf '%s\n' keep >"$fixture/outside/real-file"
+  ln -s \
+    "$fixture/outside/real-file" \
+    "$fixture/repo/skills/outside-file-link"
+  ln -s \
+    "$fixture/repo/skills/outside-file-link" \
+    "$fixture/home/.agents/skills/bravo"
 
   if run_linker "$fixture"; then
     fail "linker succeeded despite conflicting unrelated skills"
@@ -135,6 +150,12 @@ test_preserves_unrelated_skills() {
   assert_link_to \
     "$fixture/home/.agents/skills/repo-dangling-then-outside" \
     "$fixture/repo/skills/dangling-redirect"
+  assert_link_to \
+    "$fixture/home/.agents/skills/dot-segments-outside" \
+    "$fixture/repo/skills/missing/../../../outside/never-created"
+  assert_link_to \
+    "$fixture/home/.agents/skills/bravo" \
+    "$fixture/repo/skills/outside-file-link"
 }
 
 test_adds_new_skills
