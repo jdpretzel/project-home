@@ -6,32 +6,46 @@ One policy, two registrations: .claude/settings.json (Claude Code) and
 tools. Both harnesses honour the same contract: exit 0 allows the call,
 exit 2 blocks it with the stderr text as the reason.
 
-It blocks only high-confidence violations, and every denial names the
+The guard is a small footgun catch — not a command interpreter and not a
+security boundary. It denies only operations that are both consequential
+and reliably detectable at the git-verb level, and every denial names the
 detected fact, the violated rule, and the exact safe next action:
 
   1. file edits (and apply_patch targets) inside the primary checkout;
-  2. mutating git commands run against the primary checkout, including
-     via -C, --git-dir/--work-tree, a GIT_DIR/GIT_WORK_TREE environment
-     prefix, or a `cd` earlier in the command;
-  3. force pushes — flags or `+`/`:`-refspecs — remote deletions, and
-     pushes whose refspec destination is the remote's default branch,
-     anywhere (published history and the default branch are the owner's);
-  4. `git worktree remove`, anywhere (outside `close` it skips the
-     dirty/ignored/unpushed loss proofs; ordinary removal still deletes
-     ignored files);
-  5. shared-state mutations from a linked worktree of the primary —
-     `config` writes (except `--worktree` scope), `remote` rewrites, and
-     `fetch` refspecs that write outside refs/remotes/ — because linked
-     worktrees share the primary repository's config and refs.
+  2. mutating git verbs run against the primary checkout — via cwd, -C,
+     --git-dir/--work-tree, a GIT_DIR/GIT_WORK_TREE environment prefix,
+     or a `cd` earlier in the command;
+  3. writes to state every worktree shares with the primary — `config`
+     writes (except `--worktree` scope, outside the primary) and
+     `remote` rewrites — from the primary or any linked worktree;
+  4. recovery-destroying commands: `reflog expire|delete` and `gc`
+     against the primary, force/deleting/pruning pushes anywhere, and
+     any `git worktree remove` (it skips close's loss proofs; even
+     unforced removal deletes ignored files);
+  5. pushes beyond the publication contract of exactly one ordinary
+     topic branch: default-branch destinations, tag destinations,
+     `--all`/`--branches`/`--tags`/`--follow-tags`, multiple refspecs;
+  6. `git worktree add` without an explicit base commit (use the
+     lifecycle's `start`, which fetches first).
 
-This is mistake prevention for agents, not an adversarial security
-boundary. The documented fail-open cases (a miss means an allow, never a
-wrong block): unparseable stdin; an undetectable primary root; unknown
-tool names; a missing `cwd` in the payload; a `cd` target that cannot be
-resolved statically (variables, substitutions); commands inside
-subshells/command substitutions; and commands with unbalanced quotes.
+Everything else deliberately fails open — a miss must be an allow, never
+a wrong block, and partial coverage of arbitrary shell is worse than its
+honest absence. Deliberately uncovered: plain shell writes into the
+primary (`rm`, `cp`, `sed -i`, redirections, interpreters); local ref
+surgery (`branch`, `tag`, `notes`, `bisect`); fetches with write
+refspecs; `clone` and `format-patch` destinations; and the parsing gaps
+(unparseable stdin, an undetectable primary root, unknown tools, a
+missing payload `cwd`, statically unresolvable `cd` targets, subshell
+and command-substitution contents, flagged runner invocations,
+unbalanced quotes). That damage is local and recoverable — from the
+remote, the reflog, and plain `git status` visibility — which is exactly
+why the commands that destroy those recovery paths stay in the denied
+set above. The real boundaries are worktree isolation, close's loss
+proofs, and GitHub's rulesets.
+
 The owner escape hatch AGENT_LIFECYCLE_ALLOW_PRIMARY=1 lifts only the
-primary-checkout rules — never the force-push or forced-removal blocks.
+primary-checkout and shared-state rules — never the push or
+worktree-removal blocks.
 """
 
 import json
@@ -50,107 +64,26 @@ MUTATING_GIT = {
     "filter-branch", "prune",
 }
 
-# Deny these in the primary checkout only with the listed mutating
-# arguments — their bare/read forms are everyday inspection.
-CONDITIONAL_GIT = {
-    "config": None,  # special-cased: read flags allow
-    "branch": {"-D", "-d", "--delete", "-m", "-M", "--move", "-c", "-C",
-               "--copy", "--set-upstream-to", "--unset-upstream",
-               "--edit-description"},
-    "tag": {"-d", "--delete"},
-    "reflog": {"expire", "delete"},
-    "remote": {"add", "remove", "rm", "rename", "set-url", "set-head",
-               "set-branches", "prune"},
-    "submodule": {"update", "add", "init", "deinit", "sync",
-                  "absorbgitdirs", "set-url", "set-branch"},
-    "symbolic-ref": None,  # special-cased: bare read allows
-    # `git notes` writes refs/notes/*; list/show forms read.
-    "notes": {"add", "append", "copy", "edit", "merge", "remove", "prune"},
-    # bisect writes bisect refs/state and checks out candidate commits;
-    # its log/terms/visualize forms read.
-    "bisect": None,  # special-cased below
-    # Plain `fetch` (with or without --prune) converges local remote-tracking
-    # refs toward the remote's authoritative state — the lifecycle itself
-    # prescribes pruned fetches as evidence hygiene, so it stays allowed
-    # everywhere. What a fetch must not do is write outside refs/remotes/:
-    # a `src:dst` refspec (or --refmap) can update local branches, and
-    # --prune-tags deletes local tags the remote never had.
-    "fetch": None,  # special-cased: only ref-writing forms mutate
-}
-
 CONFIG_READ_FLAGS = {"--get", "--get-all", "--get-regexp", "--get-urlmatch",
                      "--list", "-l", "--show-origin", "--show-scope"}
 
-# Plain shell commands that write files: denied when a *written* path
-# (resolved against the effective directory) lands inside the primary
-# checkout. For copy-like commands only the destination (last positional)
-# is written — sources are reads, so `cp <primary>/f /tmp/x` stays
-# allowed. `mv` is not copy-like: it deletes its source, so every
-# argument counts. `rm /tmp/x` from a primary cwd also stays allowed:
-# arguments that don't resolve into the primary checkout never match.
-SHELL_WRITERS_ALL_ARGS = {"rm", "rmdir", "touch", "mkdir", "truncate", "tee",
-                          "mv"}
-SHELL_WRITERS_DEST_ONLY = {"cp", "ln", "install"}
-
-# Options whose separate value is not a written path (`touch -d yesterday`,
-# `install -m 644`): consumed before the path scan so the guard stays limited
-# to actual write targets. `mv -t DIR` is deliberately absent — its value IS
-# a written destination, and mv's all-arguments scan must keep seeing it.
-WRITER_VALUE_OPTS = {
-    "touch": {"-d", "--date", "-r", "--reference", "-t"},
-    "truncate": {"-s", "--size", "-r", "--reference"},
-    "mkdir": {"-m", "--mode"},
-    "mv": {"-S", "--suffix"},
-    "cp": {"-S", "--suffix"},
-    "ln": {"-S", "--suffix"},
-    "install": {"-m", "--mode", "-o", "--owner", "-g", "--group",
-                "-S", "--suffix", "--strip-program"},
-    "chmod": {"--reference"},
-}
+REMOTE_WRITE_SUBCOMMANDS = {"add", "remove", "rm", "rename", "set-url",
+                            "set-head", "set-branches", "prune"}
 
 GIT_VALUE_FLAGS = {"-C", "-c", "--config-env", "--namespace", "--exec-path"}
 
 # `git push` flags that take a separate value; without consuming them the
-# value would be misread as the remote positional.
+# value would be misread as the remote positional and a plain topic push
+# could be wrongly blocked.
 PUSH_VALUE_FLAGS = {"-o", "--push-option", "--receive-pack", "--exec", "--repo"}
 
 SEPARATORS = {"&&", "||", ";", "|", "&", "\n"}
 
 # Runners that execute their trailing arguments as the real command:
-# `command rm f` must be classified as `rm f`.
+# `nohup git push --force` must be classified as `git push --force`. Only
+# bare runner words (plus a `--` terminator) are peeled; flagged forms
+# (`nice -n 10 ...`) fail open.
 RUNNER_PREFIXES = {"command", "exec", "nohup", "time", "nice"}
-
-
-def peel_runners(seg):
-    while seg:
-        head = os.path.basename(seg[0])
-        if head not in RUNNER_PREFIXES:
-            return seg
-        rest = seg[1:]
-        if head == "command":
-            if any(t in ("-v", "-V") for t in rest):
-                return []  # describe-only: nothing executes
-            while rest and rest[0] == "-p":
-                rest = rest[1:]
-            if rest and rest[0] == "--":
-                rest = rest[1:]
-        elif head == "exec":
-            while rest and rest[0].startswith("-"):
-                if rest[0] == "-a" and len(rest) > 1:
-                    rest = rest[2:]
-                else:
-                    rest = rest[1:]
-        elif head == "nice":
-            while rest and rest[0].startswith("-"):
-                if rest[0] == "-n" and len(rest) > 1:
-                    rest = rest[2:]
-                else:
-                    rest = rest[1:]
-        elif head == "time":
-            while rest and rest[0] == "-p":
-                rest = rest[1:]
-        seg = rest
-    return seg
 
 START_HINT = "scripts/agent-lifecycle.sh start <branch>  (fetches, then creates an isolated worktree)"
 
@@ -194,7 +127,7 @@ def deny_shared(fact):
          "linked worktrees share the primary repository's config and refs; "
          "mutating shared state is primary-checkout mutation",
          "use per-worktree scope (`git config --worktree`) for worktree-local "
-         "settings; ask the owner before changing shared config, remotes, or refs")
+         "settings; ask the owner before changing shared config or remotes")
 
 
 def find_primary_root():
@@ -387,24 +320,6 @@ def push_remote_and_refspecs(rest):
     return repo, out
 
 
-def local_tag_exists(primary, name):
-    """True when refs/tags/<name> exists in the primary repo (worktrees share
-    tag refs) — loose file or packed-refs; reftable storage fails open."""
-    if not name or name.startswith("refs/") or "/" in name:
-        return False
-    if os.path.isfile(os.path.join(primary, ".git", "refs", "tags", name)):
-        return True
-    try:
-        with open(os.path.join(primary, ".git", "packed-refs"),
-                  encoding="utf-8") as f:
-            for line in f:
-                if line.strip().endswith(f" refs/tags/{name}"):
-                    return True
-    except OSError:
-        pass
-    return False
-
-
 def check_push(seg_text, rest, primary):
     if any(t == "--force" or t.startswith("--force-with-lease")
            or t.startswith("--force-if-includes") for t in rest) \
@@ -447,15 +362,13 @@ def check_push(seg_text, rest, primary):
     # (`git push origin HEAD:main`, `git push origin main`) or publish a
     # tag (`refs/tags/...` destination). The destination is the part after
     # `:`, or the whole refspec when there is none; an unknowable default
-    # branch or a bare/`HEAD` destination fails open.
+    # branch or a bare/`HEAD` destination fails open, as does an
+    # unqualified name that happens to resolve to a local tag.
     if remote is not None:
         default = remote_default_branch(primary, remote)
         for spec in refspecs:
             dest = spec.split(":", 1)[1] if ":" in spec else spec
-            # An unqualified name that resolves to a local tag publishes
-            # that tag: rev-parse tries refs/tags/<name> before
-            # refs/heads/<name>, so an existing tag wins the refspec.
-            if dest.startswith("refs/tags/") or local_tag_exists(primary, dest):
+            if dest.startswith("refs/tags/"):
                 deny(
                     f"a push publishing a tag: `{seg_text}`",
                     "tag publication is an owner action",
@@ -469,161 +382,6 @@ def check_push(seg_text, rest, primary):
                     "default-branch pushes are the owner's; agent work lands by PR",
                     "push a topic branch (`git push origin HEAD`) and open a draft PR",
                 )
-
-
-def conditional_mutates(sub, rest):
-    if sub == "config":
-        return not any(t in CONFIG_READ_FLAGS for t in rest)
-    if sub == "bisect":
-        positional = [t for t in rest if not t.startswith("-")]
-        if not positional:
-            return False
-        return positional[0] not in ("log", "terms", "visualize", "view")
-    if sub == "fetch":
-        # Only forms that write outside refs/remotes/ mutate: a refspec with
-        # a destination elsewhere (updates local branches), --refmap (rewrites
-        # where fetched refs land), or --prune-tags (deletes local tags).
-        if any(t == "--prune-tags" or t.startswith("--refmap") for t in rest):
-            return True
-        for t in rest:
-            if t.startswith("-") or ":" not in t:
-                continue
-            if not t.split(":", 1)[1].startswith("refs/remotes/"):
-                return True
-        return False
-    if sub == "symbolic-ref":
-        # bare `symbolic-ref NAME` reads; a second non-flag arg writes
-        positional = [t for t in rest if not t.startswith("-")]
-        return len(positional) >= 2 or "--delete" in rest or "-d" in rest
-    if sub in ("branch", "tag"):
-        flagged = CONDITIONAL_GIT[sub]
-        if any(t in flagged or t in ("-f", "--force")
-               or t.startswith("--set-upstream-to=") for t in rest):
-            return True
-        # A positional argument without a listing/filter flag creates or
-        # moves a ref (`git branch scratch`, `git tag v1`); with one it is
-        # a pattern or commit to filter by. `-a` lists for branch but
-        # annotates (creates) for tag, so the listing set is per-command.
-        listing = ("--list", "--contains", "--no-contains", "--merged",
-                   "--no-merged", "--points-at", "--sort", "--format",
-                   "--column")
-        if any(t == "-l" or t.startswith(listing)
-               or (sub == "branch" and t in ("-a", "--all", "-r", "--remotes",
-                                             "-v", "-vv", "--verbose",
-                                             "--show-current"))
-               or (sub == "tag" and t.startswith("-n"))
-               for t in rest):
-            return False
-        return any(not t.startswith("-") for t in rest)
-    flagged = CONDITIONAL_GIT.get(sub) or set()
-    return any(t in flagged for t in rest)
-
-
-def path_args_hit_primary(tokens, effective, primary, must_exist=False):
-    for t in tokens:
-        # An empty argument is not a path; joining it would resolve to the
-        # effective directory itself and block an unrelated command.
-        if not t or t.startswith("-"):
-            continue
-        resolved = t if os.path.isabs(t) else (
-            os.path.join(effective, t) if effective else None)
-        if resolved is None:
-            continue
-        if must_exist and not os.path.exists(resolved):
-            continue
-        if inside(resolved, primary):
-            return resolved
-    return None
-
-
-def writer_args(head, args):
-    """Split a writer's arguments into (positionals, target_dir), consuming
-    the options whose value is not a written path and capturing a
-    `-t`/`--target-directory` destination when present."""
-    value_opts = WRITER_VALUE_OPTS.get(head, set())
-    positionals, target_dir, i = [], None, 0
-    while i < len(args):
-        t = args[i]
-        if head in SHELL_WRITERS_DEST_ONLY:
-            # GNU form: `cp -t DIR SOURCE...` — the directory is the
-            # destination and every positional after it is a source.
-            if t in ("-t", "--target-directory") and i + 1 < len(args):
-                target_dir = args[i + 1]
-                i += 2
-                continue
-            if t.startswith("--target-directory="):
-                target_dir = t.split("=", 1)[1]
-                i += 1
-                continue
-        if t in value_opts and i + 1 < len(args):
-            i += 2
-            continue
-        if not t.startswith("-"):
-            positionals.append(t)
-        i += 1
-    return positionals, target_dir
-
-
-def check_plain_writers(seg, seg_text, effective, primary):
-    head = os.path.basename(seg[0])
-    hit = None
-    if head in SHELL_WRITERS_ALL_ARGS:
-        positionals, _ = writer_args(head, seg[1:])
-        hit = path_args_hit_primary(positionals, effective, primary)
-    elif head == "chmod":
-        positionals, _ = writer_args(head, seg[1:])
-        # The first positional is the mode (`u+x`, `755`) unless --reference
-        # supplies it; the rest are the files whose metadata changes — a
-        # tracked executable bit flip dirties the checkout.
-        has_ref = any(t == "--reference" or t.startswith("--reference=")
-                      for t in seg[1:])
-        # A symbolic mode may itself start with a dash (`chmod -w f`); mode
-        # letters (ugoa+rwxXst) and option letters (Rcfv) are disjoint, so
-        # such a token is the mode operand, already excluded from
-        # positionals by its dash.
-        dash_mode = any(re.fullmatch(r"-[rwxXstugoa]+", t) for t in seg[1:])
-        hit = path_args_hit_primary(
-            positionals if has_ref or dash_mode else positionals[1:],
-            effective, primary)
-    elif head in SHELL_WRITERS_DEST_ONLY:
-        positionals, target_dir = writer_args(head, seg[1:])
-        if head == "install" and any(t in ("-d", "--directory")
-                                     for t in seg[1:]):
-            # `install -d DIRECTORY...`: every operand is a directory to
-            # create, not sources plus one destination.
-            dests = positionals
-        elif target_dir is not None:
-            dests = [target_dir]
-        elif head == "ln" and len(positionals) == 1:
-            # One-operand `ln -s /tmp/target` creates basename(target) in
-            # the current directory — the operand itself is only read.
-            dests = [os.path.join(effective, os.path.basename(positionals[0]))] \
-                if effective else []
-        else:
-            dests = positionals[-1:]
-        if dests:
-            hit = path_args_hit_primary(dests, effective, primary)
-    elif head == "sed" and any(
-            t == "--in-place" or t.startswith("--in-place=")
-            or (t.startswith("-i") and not t.startswith("--"))
-            # combined short flags carry it too: `sed -Ei 's/a/b/' file`
-            or (re.fullmatch(r"-[a-zA-Z]+", t) and "i" in t[1:])
-            for t in seg[1:]):
-        # The sed expression also looks like a relative path; only count
-        # arguments that exist as files so `s/a/b/` can't false-match.
-        hit = path_args_hit_primary(seg[1:], effective, primary, must_exist=True)
-    if hit:
-        deny_primary(f"`{seg_text}` writing {hit}, inside the primary checkout at {primary}")
-
-    # Bash's other write redirections tokenize as single punctuation runs:
-    # `&>`/`&>>` (stdout+stderr) and `>|` (clobbering).
-    for i, tok in enumerate(seg):
-        if tok in (">", ">>", "&>", "&>>", ">|") and i + 1 < len(seg):
-            target = seg[i + 1]
-            resolved = target if os.path.isabs(target) else (
-                os.path.join(effective, target) if effective else None)
-            if resolved and inside(resolved, primary):
-                deny_primary(f"a shell redirection writing {resolved}, inside the primary checkout at {primary}")
 
 
 def worktree_add_lacks_base(rest):
@@ -657,17 +415,18 @@ def check_bash(command, cwd, primary):
         # (`GIT_DIR=<primary>/.git git reset --hard`), so their values count
         # as operating directories.
         env_dirs = []
-        while seg and seg != RESET \
-                and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", seg[0]):
+        while seg and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", seg[0]):
             var, val = seg[0].split("=", 1)
             if var in ("GIT_DIR", "GIT_WORK_TREE"):
                 resolved = resolve_dir(effective, val)
                 if resolved is not None:
                     env_dirs.append(resolved)
             seg = seg[1:]
-        seg = peel_runners(seg)
-        if not seg:
-            continue
+        while seg and (os.path.basename(seg[0]) in RUNNER_PREFIXES
+                       or seg[0] == "--"):
+            seg = seg[1:]
+        if not seg or seg[0].startswith("-"):
+            continue  # a flagged runner form: documented fail-open
         if seg[0] in ("cd", "pushd"):
             target = resolve_dir(effective, seg[1] if len(seg) > 1 else None)
             if target is None:
@@ -690,7 +449,6 @@ def check_bash(command, cwd, primary):
 
         parsed = parse_git(seg)
         if parsed is None:
-            check_plain_writers(seg, seg_text, effective, primary)
             continue
         sub, rest, c_chain, explicit_dirs = parsed
 
@@ -727,68 +485,32 @@ def check_bash(command, cwd, primary):
                 targets.append(resolved)
         targets.extend(env_dirs)
 
-        # clone materializes an untracked repository at its destination —
-        # the second positional, or a directory derived from the source name.
-        if sub == "clone":
-            value_flags = {"-b", "--branch", "--depth", "-o", "--origin",
-                           "-u", "--upload-pack", "--reference",
-                           "--reference-if-able", "--separate-git-dir",
-                           "--template", "-c", "--config", "-j", "--jobs",
-                           "--filter", "--shallow-since", "--shallow-exclude",
-                           "--server-option", "--bundle-uri"}
-            pos, i = [], 0
-            while i < len(rest):
-                t = rest[i]
-                if t in value_flags and i + 1 < len(rest):
-                    i += 2
-                    continue
-                if t.startswith("-"):
-                    i += 1
-                    continue
-                pos.append(t)
-                i += 1
-            dest = None
-            if len(pos) >= 2:
-                dest = pos[1]
-            elif pos:
-                name = os.path.basename(pos[0].rstrip("/"))
-                dest = name[:-4] if name.endswith(".git") else name
-            base = targets[0] if targets else None
-            resolved = resolve_dir(base, dest) if dest else None
-            if resolved is not None and inside(resolved, primary):
-                deny_primary(f"`git clone` creating {resolved}, inside the primary checkout at {primary}")
-
-        # format-patch writes .patch files into its output directory — the
-        # effective directory unless --stdout or -o/--output-directory says
-        # otherwise.
-        if sub == "format-patch" and "--stdout" not in rest:
-            out = None
-            for i, t in enumerate(rest):
-                if t in ("-o", "--output-directory") and i + 1 < len(rest):
-                    out = rest[i + 1]
-                elif t.startswith("--output-directory="):
-                    out = t.split("=", 1)[1]
-                elif t.startswith("-o") and len(t) > 2 and not t.startswith("--"):
-                    out = t[2:]
-            base = targets[0] if targets else None
-            dest = resolve_dir(base, out) if out is not None else base
-            if dest is not None and inside(dest, primary):
-                deny_primary(f"`git format-patch` writing patch files into the primary checkout at {primary}")
-
         hits_primary = any(inside(t, primary) for t in targets)
-        if hits_primary:
-            if sub in MUTATING_GIT:
-                deny_primary(f"`git {sub}` running against the primary checkout at {primary}")
-            elif sub in CONDITIONAL_GIT and conditional_mutates(sub, rest):
-                deny_primary(f"`git {sub} {' '.join(rest[:3])}` mutating the primary checkout at {primary}")
-        elif sub in ("config", "remote", "fetch") \
-                and conditional_mutates(sub, rest) \
-                and not (sub == "config" and "--worktree" in rest) \
-                and any(linked_worktree_of(t, primary) for t in targets):
-            # Linked worktrees share the primary's .git/config and refs:
-            # `git config core.hooksPath` or `git remote set-url` from one
-            # rewrites owner-controlled shared state all the same.
-            deny_shared(f"`git {sub} {' '.join(rest[:3])}` mutating shared repository state from a linked worktree of {primary}")
+        in_linked = not hits_primary and \
+            any(linked_worktree_of(t, primary) for t in targets)
+
+        if hits_primary and sub in MUTATING_GIT:
+            deny_primary(f"`git {sub}` running against the primary checkout at {primary}")
+        elif hits_primary and sub == "reflog" \
+                and rest[:1] and rest[0] in ("expire", "delete"):
+            # The reflog is the recovery net that makes the guard's other
+            # fail-opens acceptable; destroying it is never a fail-open.
+            deny_primary(f"`git reflog {rest[0]}` destroying recovery state in the primary checkout at {primary}")
+        elif sub == "config" \
+                and not any(t in CONFIG_READ_FLAGS for t in rest):
+            # config writes are shared across every linked worktree (except
+            # --worktree scope, which is worktree-local — but from the
+            # primary even that writes the primary's own state).
+            if hits_primary:
+                deny_primary(f"`git config {' '.join(rest[:3])}` mutating the primary checkout at {primary}")
+            elif in_linked and "--worktree" not in rest:
+                deny_shared(f"`git config {' '.join(rest[:3])}` mutating shared repository state from a linked worktree of {primary}")
+        elif sub == "remote" \
+                and any(t in REMOTE_WRITE_SUBCOMMANDS for t in rest):
+            if hits_primary:
+                deny_primary(f"`git remote {' '.join(rest[:2])}` mutating the primary checkout at {primary}")
+            elif in_linked:
+                deny_shared(f"`git remote {' '.join(rest[:2])}` mutating shared repository state from a linked worktree of {primary}")
 
 
 def apply_patch_targets(tool_input):

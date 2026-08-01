@@ -817,54 +817,18 @@ test_guard_allows_inspection_and_ignores_lookalikes() {
   guard_case "unparseable stdin" 0 "not json at all"
 }
 
-test_guard_blocks_history_and_repo_surgery() {
+test_guard_blocks_shared_state_and_recovery_surgery() {
   guard_fixture
-  guard_case "git branch -D in the primary checkout" 2 \
-    "$(json_bash "git branch -D topic" "$primary")"
   guard_case "git config <name> <value> in the primary checkout" 2 \
     "$(json_bash "git config user.name x" "$primary")"
+  guard_case "git remote set-url in the primary checkout" 2 \
+    "$(json_bash "git remote set-url origin /elsewhere" "$primary")"
+  # The reflog and gc are the recovery net that makes the guard's
+  # deliberate fail-opens acceptable; destroying it is never a fail-open.
   guard_case "git reflog expire in the primary checkout" 2 \
     "$(json_bash "git reflog expire --expire=now --all" "$primary")"
   guard_case "git gc in the primary checkout" 2 \
     "$(json_bash "git gc --prune=now" "$primary")"
-  guard_case "git branch <name> creating a ref in the primary checkout" 2 \
-    "$(json_bash "git branch scratch" "$primary")"
-  guard_case "git tag <name> creating a ref in the primary checkout" 2 \
-    "$(json_bash "git tag v1" "$primary")"
-  guard_case "git tag -f moving a tag in the primary checkout" 2 \
-    "$(json_bash "git tag -f v1 HEAD~1" "$primary")"
-  # notes writes refs/notes/*; its read forms stay inspection.
-  guard_case "git notes add in the primary checkout" 2 \
-    "$(json_bash "git notes add -m x HEAD" "$primary")"
-  guard_case "git notes list in the primary checkout" 0 \
-    "$(json_bash "git notes list" "$primary")"
-  # bisect writes bisect refs/state and checks out commits; log reads.
-  guard_case "git bisect start in the primary checkout" 2 \
-    "$(json_bash "git bisect start" "$primary")"
-  guard_case "git bisect log in the primary checkout" 0 \
-    "$(json_bash "git bisect log" "$primary")"
-  # format-patch writes .patch files into its output directory.
-  guard_case "git format-patch writing into the primary checkout" 2 \
-    "$(json_bash "git format-patch HEAD~1" "$primary")"
-  guard_case "git format-patch --stdout in the primary checkout" 0 \
-    "$(json_bash "git format-patch --stdout HEAD~1" "$primary")"
-  guard_case "git format-patch -o elsewhere from the primary checkout" 0 \
-    "$(json_bash "git format-patch -o /tmp/patches HEAD~1" "$primary")"
-  # --edit-description writes branch.<name>.description into shared config.
-  guard_case "git branch --edit-description in the primary checkout" 2 \
-    "$(json_bash "git branch --edit-description" "$primary")"
-  # submodule init copies settings into the repository's local config.
-  guard_case "git submodule init in the primary checkout" 2 \
-    "$(json_bash "git submodule init" "$primary")"
-  guard_case "git submodule status in the primary checkout" 0 \
-    "$(json_bash "git submodule status" "$primary")"
-  # clone materializes an untracked repository at its destination.
-  guard_case "git clone into the primary checkout" 2 \
-    "$(json_bash "git clone /tmp/source nested" "$primary")"
-  guard_case "git clone with a derived dir in the primary checkout" 2 \
-    "$(json_bash "git clone /tmp/source.git" "$primary")"
-  guard_case "git clone reading the primary to elsewhere" 0 \
-    "$(json_bash "git clone $primary /tmp/clone-dest" "$TEST_ROOT")"
 }
 
 test_guard_push_matrix() {
@@ -913,34 +877,8 @@ test_guard_push_matrix() {
     "$(json_bash "git push --repo origin HEAD:alpha HEAD:beta" "$guard_wt")"
   guard_case "git push --repo with one topic refspec" 0 \
     "$(json_bash "git push --repo=origin HEAD:feature" "$guard_wt")"
-  # An unqualified name that is a local tag publishes that tag: rev-parse
-  # tries refs/tags/ before refs/heads/.
-  git -C "$primary" tag guardtag
-  guard_case "git push with an unqualified tag refspec" 2 \
-    "$(json_bash "git push origin guardtag" "$guard_wt")"
-  guard_case "git push with an unqualified non-tag refspec" 0 \
+  guard_case "git push with an unqualified topic refspec" 0 \
     "$(json_bash "git push origin sometopic" "$guard_wt")"
-}
-
-test_guard_fetch_rules() {
-  guard_fixture
-  # Plain and pruned fetches converge toward the remote's authoritative
-  # state — the lifecycle's own evidence hygiene — and stay allowed even in
-  # the primary checkout.
-  guard_case "plain git fetch in the primary checkout" 0 \
-    "$(json_bash "git fetch origin" "$primary")"
-  guard_case "git fetch --prune in the primary checkout" 0 \
-    "$(json_bash "git fetch --prune origin" "$primary")"
-  # Forms that write outside refs/remotes/ are mutations wherever they run:
-  # a src:dst refspec updates local branches, --prune-tags deletes local tags.
-  guard_case "git fetch writing a local branch in the primary checkout" 2 \
-    "$(json_bash "git fetch origin main:main" "$primary")"
-  guard_case "git fetch --prune-tags in the primary checkout" 2 \
-    "$(json_bash "git fetch --prune-tags origin" "$primary")"
-  guard_case "git fetch writing a local branch from a worktree" 2 \
-    "$(json_bash "git fetch origin main:scratch" "$guard_wt")"
-  guard_case "plain git fetch from a worktree" 0 \
-    "$(json_bash "git fetch origin" "$guard_wt")"
 }
 
 test_guard_shared_state_from_worktrees() {
@@ -973,85 +911,41 @@ test_guard_worktree_rules() {
     "$(json_bash "git worktree add ../x origin/main" "$TEST_ROOT")"
 }
 
-test_guard_shell_writers() {
+test_guard_directory_tracking_and_runners() {
   guard_fixture
-  guard_case "rm of a relative path in the primary checkout" 2 \
-    "$(json_bash "rm f.txt" "$primary")"
-  guard_case "rm of an unrelated absolute path from a primary cwd" 0 \
-    "$(json_bash "rm /tmp/unrelated-file" "$primary")"
-  guard_case "cp reading out of the primary checkout" 0 \
-    "$(json_bash "cp $primary/README.md /tmp/x" "$TEST_ROOT")"
-  guard_case "cp writing into the primary checkout" 2 \
-    "$(json_bash "cp /tmp/x $primary/README.md" "$TEST_ROOT")"
-  guard_case "mv moving a file out of the primary checkout" 2 \
-    "$(json_bash "mv $primary/README.md /tmp/x" "$TEST_ROOT")"
-  guard_case "mv between outside paths from a primary cwd" 0 \
-    "$(json_bash "mv /tmp/a /tmp/b" "$primary")"
-  # The macOS spelling carries an empty argument; it must neither hide the
-  # path that follows it nor be mistaken for a path of its own.
-  guard_case "sed -i over a file in the primary checkout" 2 \
-    "$(json_bash "sed -i '' 's/a/b/' $primary/README.md" "$TEST_ROOT")"
-  guard_case "sed -i over an unrelated file from a primary cwd" 0 \
-    "$(json_bash "sed -i '' 's/a/b/' /tmp/unrelated-file" "$primary")"
-  guard_case "a redirection writing into the primary checkout" 2 \
-    "$(json_bash "echo x > $primary/f" "$TEST_ROOT")"
-  guard_case "a redirection writing elsewhere from a primary cwd" 0 \
-    "$(json_bash "echo x > /tmp/f" "$primary")"
-  # GNU `-t DIR` puts the destination first; the last positional is a source.
-  guard_case "cp -t into the primary checkout" 2 \
-    "$(json_bash "cp -t $primary /tmp/file" "$TEST_ROOT")"
-  guard_case "cp -t elsewhere reading from the primary checkout" 0 \
-    "$(json_bash "cp -t /tmp $primary/README.md" "$TEST_ROOT")"
-  # `-d yesterday` is a date, not a relative path under the checkout.
-  guard_case "touch -d with a date value from a primary cwd" 0 \
-    "$(json_bash "touch -d yesterday /tmp/outside" "$primary")"
   # A cd that will fail at runtime leaves the shell — and so the guard's
   # effective directory — where it was.
   guard_case "cd to a missing dir keeps the primary cwd" 2 \
     "$(json_bash "cd /definitely-not-here-xyz; git commit -m wip" "$primary")"
   guard_case "mkdir && cd into the new dir leaves the primary" 0 \
     "$(json_bash "mkdir -p /tmp/guard-fresh-dir && cd /tmp/guard-fresh-dir && git commit -m wip" "$primary")"
-  # Every documented in-place spelling, not just BSD's separate -i.
-  guard_case "sed --in-place over a file in the primary checkout" 2 \
-    "$(json_bash "sed --in-place 's/a/b/' $primary/README.md" "$TEST_ROOT")"
-  guard_case "sed -Ei over a file in the primary checkout" 2 \
-    "$(json_bash "sed -Ei 's/a/b/' $primary/README.md" "$TEST_ROOT")"
-  # Bash's other write redirections tokenize as single punctuation runs.
-  guard_case "a &> redirection into the primary checkout" 2 \
-    "$(json_bash "echo x &> $primary/f" "$TEST_ROOT")"
-  guard_case "a >| redirection into the primary checkout" 2 \
-    "$(json_bash "echo x >| $primary/f" "$TEST_ROOT")"
-  # One-operand ln writes basename(target) into the cwd, not the operand.
-  guard_case "one-operand ln from a primary cwd" 2 \
-    "$(json_bash "ln -s /tmp/target" "$primary")"
-  guard_case "one-operand ln from outside the primary" 0 \
-    "$(json_bash "ln -s /tmp/target" "$TEST_ROOT")"
-  # chmod dirties tracked executable bits; the first positional is the mode.
-  guard_case "chmod +x on a primary file" 2 \
-    "$(json_bash "chmod +x $primary/README.md" "$TEST_ROOT")"
-  guard_case "chmod on an outside path from a primary cwd" 0 \
-    "$(json_bash "chmod 755 /tmp/x" "$primary")"
-  # install -d: every operand is a directory to create.
-  guard_case "install -d creating a dir in the primary checkout" 2 \
-    "$(json_bash "install -d $primary/newdir /tmp/other" "$TEST_ROOT")"
-  guard_case "install -d entirely outside from a primary cwd" 0 \
-    "$(json_bash "install -d /tmp/a /tmp/b" "$primary")"
-  # A leading-dash symbolic mode is the mode operand, not an option.
-  guard_case "chmod -w on a primary file" 2 \
-    "$(json_bash "chmod -w $primary/README.md" "$TEST_ROOT")"
-  guard_case "chmod -w on an outside path from a primary cwd" 0 \
-    "$(json_bash "chmod -w /tmp/x" "$primary")"
-  # Runners execute their trailing arguments as the real command.
-  guard_case "command rm in the primary checkout" 2 \
-    "$(json_bash "command rm f.txt" "$primary")"
+  # Bare runner words execute their trailing arguments as the real command.
   guard_case "command git commit in the primary checkout" 2 \
     "$(json_bash "command git commit -m wip" "$primary")"
   guard_case "nohup git commit in the primary checkout" 2 \
     "$(json_bash "nohup git commit -m wip" "$primary")"
+  guard_case "command -- terminator before the real command" 2 \
+    "$(json_bash "command -- git commit -m wip" "$primary")"
   guard_case "command -v is describe-only" 0 \
     "$(json_bash "command -v git" "$primary")"
-  guard_case "command -- terminator before the real command" 2 \
-    "$(json_bash "command -- rm f.txt" "$primary")"
+}
+
+test_guard_deliberate_fail_opens() {
+  guard_fixture
+  # Each of these was once denied by command-pattern analysis that grew
+  # toward a partial shell interpreter; the coverage was deleted
+  # deliberately (ADR 0004). The damage each represents is local and
+  # recoverable — from the remote, the reflog, and plain `git status`
+  # visibility — and these cases pin the deletion as a decision, not an
+  # accident. The payloads only pass through the guard; nothing runs.
+  guard_case "a plain shell write into the primary (accepted fail-open)" 0 \
+    "$(json_bash "rm f.txt" "$primary")"
+  guard_case "a redirection into the primary (accepted fail-open)" 0 \
+    "$(json_bash "echo x > $primary/f" "$TEST_ROOT")"
+  guard_case "local branch creation in the primary (accepted fail-open)" 0 \
+    "$(json_bash "git branch scratch" "$primary")"
+  guard_case "a fetch writing a local branch (accepted fail-open)" 0 \
+    "$(json_bash "git fetch origin main:scratch" "$guard_wt")"
 }
 
 test_guard_apply_patch() {
@@ -1117,12 +1011,12 @@ test_close_ignores_other_remotes_tracking_refs
 test_close_of_a_detached_worktree_reports_success
 test_guard_blocks_primary_checkout_mutation
 test_guard_allows_inspection_and_ignores_lookalikes
-test_guard_blocks_history_and_repo_surgery
+test_guard_blocks_shared_state_and_recovery_surgery
 test_guard_push_matrix
-test_guard_fetch_rules
 test_guard_shared_state_from_worktrees
 test_guard_worktree_rules
-test_guard_shell_writers
+test_guard_directory_tracking_and_runners
+test_guard_deliberate_fail_opens
 test_guard_apply_patch
 test_guard_escape_hatch_is_scoped_to_the_primary_rules
 test_guard_parses_a_quoted_path_with_spaces

@@ -67,37 +67,30 @@ One lifecycle, three layers, one owner per fact:
   blocking, so the hard gate lives at `PreToolUse`) and
   `scripts/agent-lifecycle-guard.py` on `PreToolUse` (exit 2 blocks in both;
   the registrations fail closed when `python3` is missing rather than
-  silently disarming). The guard denies only high-confidence violations —
-  file edits, mutating git commands, and common shell writes (`rm`, `mv`,
-  `cp` destinations — including `-t` target-directory form and
-  `install -d`'s all-directory operands — one-operand `ln` into the cwd,
-  `chmod` against checkout files, every `sed` in-place spelling (`-i`,
-  `--in-place`, combined `-Ei`), redirections including `&>` and `>|`) against the
-  primary checkout, including via `-C`, `--git-dir`, a
-  `GIT_DIR`/`GIT_WORK_TREE` environment prefix, a runner wrapper
-  (`command`, `exec`, `nohup`, `time`, `nice`), or a `cd` earlier in the
-  command (a `cd` whose target
-  cannot exist keeps the prior directory, since the shell does too —
-  pinned in `test_guard_shell_writers`);
-  force pushes in any form (flags, `+`/`:` refspecs, `--delete`,
-  `--mirror`), ordinary refspecs whose destination is the remote
-  default branch (`git push origin HEAD:main`), and pushes beyond the
-  one-topic-branch contract — `--all`/`--branches`, `--tags`/
-  `--follow-tags`, tag destinations (spelled `refs/tags/` or an
-  unqualified name resolving to a local tag), or multiple refspecs in
-  one push (all pinned in `test_guard_push_matrix`); every `git worktree remove` (only `close`
-  runs the loss proofs, and even unforced removal deletes ignored files);
-  shared-state mutation from linked worktrees, which share the primary's
-  config and refs — `config` writes (except `--worktree` scope), `remote`
-  rewrites, and `fetch` forms that write outside `refs/remotes/`
-  (plain and `--prune` fetches stay allowed everywhere as evidence
-  hygiene; pinned in `test_guard_fetch_rules` and
-  `test_guard_shared_state_from_worktrees`); `bisect` state changes,
-  `format-patch` writing its patch files into the primary (`--stdout`
-  and outside `-o` stay allowed), and `clone` destinations landing in
-  the primary; and implicit-base
-  `git worktree add` — and every denial states the fact, the rule, and
-  the exact safe next action.
+  silently disarming). The guard is a small footgun catch, not a command
+  interpreter: it denies only operations that are both consequential and
+  reliably detectable at the git-verb level. The denied set — file edits
+  and mutating git verbs against the primary checkout, including via
+  `-C`, `--git-dir`, a `GIT_DIR`/`GIT_WORK_TREE` environment prefix, a
+  bare runner word (`command`, `nohup`, …), or a `cd` earlier in the
+  command (a `cd` whose target cannot exist keeps the prior directory,
+  since the shell does too — pinned in
+  `test_guard_blocks_primary_checkout_mutation` and
+  `test_guard_directory_tracking_and_runners`); writes to state every
+  worktree shares with the primary — `config` writes (except `--worktree`
+  scope outside the primary) and `remote` rewrites (pinned in
+  `test_guard_blocks_shared_state_and_recovery_surgery` and
+  `test_guard_shared_state_from_worktrees`); the recovery-destroyers —
+  `reflog expire|delete` and `gc` against the primary, force, deleting,
+  pruning, or mirror pushes anywhere, and every `git worktree remove`
+  (only `close` runs the loss proofs, and even unforced removal deletes
+  ignored files); pushes beyond the one-topic-branch contract — the
+  remote default branch as destination in any spelling, `refs/tags/`
+  destinations, `--all`/`--branches`/`--tags`/`--follow-tags`, or
+  multiple refspecs in one push (all pinned in
+  `test_guard_push_matrix`); and implicit-base `git worktree add` — and
+  every denial states the fact, the rule, and the exact safe next
+  action.
   Configuration files stay separate per harness; the executable policy is
   shared. In both harnesses a repo's hooks become active only after the
   owner has reviewed and trusted them in that harness (Claude: workspace
@@ -157,16 +150,31 @@ registrations share one guard with no translation layer. Known coverage gaps, re
   `$CLAUDE_PROJECT_DIR`.
 - Hooks see model tool calls, not native app/hosted operations, and the
   matchers do not cover MCP tools that can mutate GitHub state.
-- The guard's documented fail-open cases (a miss allows; only a
-  high-confidence match blocks): unparseable stdin, an undetectable primary
-  root, unknown tool names, a payload without `cwd`, a `cd` target that
-  cannot be resolved statically (variables, substitutions), commands inside
-  command substitutions, unbalanced quotes, and file writes performed by
-  interpreters (`python -c`, `perl -e`) rather than the covered shell
-  writers. Shared-ref writes from linked worktrees are denied only for
-  the named subcommands (`config`, `remote`, branch-writing `fetch`);
-  `git branch`/`git tag` from a worktree also write shared refs and are
-  not denied — recorded as a gap, not claimed as coverage.
+- The guard deliberately fails open on everything outside its six denial
+  classes — a miss must be an allow, never a wrong block, and partial
+  coverage of arbitrary shell is worse than its honest absence. An earlier
+  revision grew, under review pressure, toward a partial shell-command
+  interpreter: plain-shell write analysis (`rm`/`cp`/`mv`/`sed -i`/
+  `chmod`/`install`/`ln`/redirections), `clone` and `format-patch`
+  destination checks, fetch-refspec analysis, `branch`/`tag`/`notes`/
+  `bisect` subcommand disambiguation, unqualified-tag refspec resolution,
+  and per-runner option parsing. That coverage was deleted on 2026-08-01
+  by the owner's deletion test — retain only controls that are both
+  consequential and reliably detectable — because every deleted class is
+  local, recoverable damage (from the remote, the reflog, and plain
+  `git status` visibility) while its detection was inherently incomplete
+  (any interpreter, `python -c` upward, bypasses it). The deletion is
+  pinned as behaviour, not accident: `test_guard_deliberate_fail_opens`
+  asserts the guard *allows* representative deleted cases, and fails
+  against the pre-deletion guard. The parsing gaps stay fail-open too:
+  unparseable stdin, an undetectable primary root, unknown tool names, a
+  payload without `cwd`, statically unresolvable `cd` targets, subshell
+  and command-substitution contents, flagged runner invocations
+  (`nice -n 10 …`), and unbalanced quotes. What keeps all of this safe is
+  precisely the denied set: the guard blocks the commands that would
+  destroy the recovery paths — `reflog expire`/`gc` against the primary
+  (pinned in `test_guard_blocks_shared_state_and_recovery_surgery`) and
+  ref-deleting or force pushes (pinned in `test_guard_push_matrix`).
 - The doc-writing flows (`research`, `domain-modeling`, and
   `grill-with-docs`, which drives it) carry no per-skill lifecycle pointer:
   in this repo the always-on invariant and the hooks already route them,
