@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/scripts/agent-lifecycle.sh preflight --brief"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v python3 >/dev/null 2>&1 || { echo 'agent-lifecycle guard: python3 not found; failing closed' >&2; exit 2; }; exec python3 \"$CLAUDE_PROJECT_DIR\"/scripts/agent-lifecycle-guard.py"
+          }
+        ]
+      }
+    ]
+  }
+}

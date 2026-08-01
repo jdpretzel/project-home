@@ -9,6 +9,8 @@ A discipline for hard bugs. Skip phases only when explicitly justified.
 
 When exploring the codebase, read `CONTEXT.md` (if it exists) to get a clear mental model of the relevant modules, and check ADRs in the area you're touching.
 
+Where the repo provides a lifecycle entry (`scripts/agent-lifecycle.sh`), enter it **before Phase 1**, not at the fix: building the feedback loop already mutates the repo (failing tests, fixtures, throwaway harnesses), and Phase 4 adds instrumentation — do all of it in a worktree the lifecycle started, never the primary checkout.
+
 ## Phase 1 — Build a feedback loop
 
 **This is the skill.** Everything else is mechanical. If you have a **tight** pass/fail signal for the bug — one that goes red on _this_ bug — you will find the cause; bisection, hypothesis-testing, and instrumentation all just consume it. If you don't have one, no amount of staring at code will save you.
@@ -106,6 +108,8 @@ Tool preference:
 **Perf branch.** For performance regressions, logs are usually wrong. Instead: establish a baseline measurement (timing harness, `performance.now()`, profiler, query plan), then bisect. Measure first, fix second.
 
 ## Phase 5 — Fix + regression test
+
+You should already be in a lifecycle worktree (entered before Phase 1); if you are somehow still in the primary checkout, stop and enter one now — the fix never lands there.
 
 Write the regression test **before the fix** — but only if there is a **correct seam** for it.
 

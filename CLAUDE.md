@@ -1,5 +1,15 @@
 # Working in this repo
 
+## Agent repository lifecycle
+
+Agents may inspect this primary checkout but never mutate it — no edits, commits, merges, rebases, branch switches, or stashes here. Every mutating task, whatever skill or request started it, begins with:
+
+    scripts/agent-lifecycle.sh start <branch>
+
+which fetches `origin`, resolves the remote default branch (or `--base <remote-branch>`) to an exact commit, creates an isolated worktree at that commit, and records the base. If the fetch fails, mutating work stops — never fall back silently to a cached or local base. Plan *inside* the worktree, recording the base commit, intended scope, and publication endpoint. Review against immutable SHAs (resolve the base and `HEAD` once), and account for dirty and untracked files, which committed-range diffs don't show.
+
+Before publishing, run `scripts/agent-lifecycle.sh publish-check`: it re-fetches, exposes base advancement, and stops on authority-carrying paths (`.claude/`, `.codex/`, `.github/`, `.claude-plugin/`, the lifecycle scripts, and `CLAUDE.md`/`AGENTS.md` themselves) — those need owner approval before their first push. Ordinary reviewed work publishes unattended: push the one topic branch (never force), immediately open a **draft** PR, verify the remote head and the PR's base/head, then pause. Merge, force-push, rewriting published history, default-branch pushes, tags, releases, settings changes, and installs are owner-approved actions. Rebase only unpublished, privately owned history; once a branch is published or shared, merge the current base into it instead. Aborting a wrong merge or rebase is a valid outcome — verify the operation, checkout, base, and authority before finishing one. Remove a worktree only through `scripts/agent-lifecycle.sh close`, which proves — against a fresh fetch — that no dirty, untracked, ignored, or unpushed work would be lost. Rationale and boundaries: [.agents/adr/0004-agent-repository-lifecycle.md](./.agents/adr/0004-agent-repository-lifecycle.md).
+
 ## Skill buckets
 
 Skills are organized into bucket folders under `skills/`:
@@ -52,6 +62,8 @@ Why a Claude plugin but not (yet) a Codex one lives in [.agents/adr/0002-ship-as
 
 ## Scripts
 
+- **`scripts/agent-lifecycle.sh`** — the deterministic owner of the agent lifecycle's Git mechanics: `start` (fetch, exact remote base, isolated worktree), `preflight`/`status` (read-only state), `publish-check` (pre-publication proofs and the authority-path stop), `close` (proof-before-cleanup removal). The hooks in `.claude/settings.json` and `.codex/hooks.json` are thin adapters around it and `scripts/agent-lifecycle-guard.py`; the guard is a small footgun catch, not a command interpreter: it blocks primary-checkout mutation at the git-verb level, force and default-branch pushes, pushes beyond one topic branch (`--all`, tags, multiple refspecs), any `git worktree remove` (only `close` runs the loss proofs), shared-state mutation (config, remotes) from linked worktrees, and the recovery-destroyers (`reflog expire`, `gc`) against the primary; everything else deliberately fails open (see the ADR).
+- **`scripts/test-agent-lifecycle.sh`** — the lifecycle's behavioural proof, in temporary repositories with file remotes. Run it before opening a PR that touches the lifecycle scripts, the guard, or either hook registration.
 - **`scripts/link-skills.sh`** — links every skill outside `deprecated/` into the local harness skill directories (`~/.claude/skills`, `~/.agents/skills`). Run it attended because it writes outside the repo. It creates or refreshes repo-owned links and prunes only dangling symlinks whose resolved targets are inside this repo; real directories and unrelated entries are preserved, and a name conflict exits with an error. A `git pull` keeps existing linked skills current; re-run the script after adding, removing, or renaming a skill.
 - **`scripts/check-consistency.sh`** — run before opening a PR. Its scope is deliberately narrow: the tracker invariants from [.agents/adr/0003-github-is-the-supported-tracker.md](./.agents/adr/0003-github-is-the-supported-tracker.md) — references to the retired tracker abstraction, and the behaviours that decision requires (the GitHub hard stop, both triage branches, the in-GitHub degradation). It is **prose lint, not behavioural proof** — it greps text, so it can tell you a skill still *says* the right thing, never that a skill still *does* it. Broader enforcement of the README / `plugin.json` / router rules above is deliberately not here; that mechanism is [The router and system legibility](https://github.com/jdpretzel/project-home/issues/13)'s decision to make. Not a substitute for `claude plugin validate .` — run both.
 
