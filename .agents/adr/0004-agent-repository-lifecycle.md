@@ -71,7 +71,8 @@ One lifecycle, three layers, one owner per fact:
   `chmod` against checkout files, every `sed` in-place spelling (`-i`,
   `--in-place`, combined `-Ei`), redirections including `&>` and `>|`) against the
   primary checkout, including via `-C`, `--git-dir`, a
-  `GIT_DIR`/`GIT_WORK_TREE` environment prefix, or a `cd` earlier in the
+  `GIT_DIR`/`GIT_WORK_TREE` environment prefix, a runner wrapper
+  (`command`, `exec`, `nohup`, `time`, `nice`), or a `cd` earlier in the
   command (a `cd` whose target
   cannot exist keeps the prior directory, since the shell does too —
   pinned in `test_guard_shell_writers`);

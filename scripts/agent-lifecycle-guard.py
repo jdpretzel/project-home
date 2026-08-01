@@ -55,13 +55,14 @@ MUTATING_GIT = {
 CONDITIONAL_GIT = {
     "config": None,  # special-cased: read flags allow
     "branch": {"-D", "-d", "--delete", "-m", "-M", "--move", "-c", "-C",
-               "--copy", "--set-upstream-to", "--unset-upstream"},
+               "--copy", "--set-upstream-to", "--unset-upstream",
+               "--edit-description"},
     "tag": {"-d", "--delete"},
     "reflog": {"expire", "delete"},
     "remote": {"add", "remove", "rm", "rename", "set-url", "set-head",
                "set-branches", "prune"},
-    "submodule": {"update", "add", "deinit", "sync", "absorbgitdirs",
-                  "set-url", "set-branch"},
+    "submodule": {"update", "add", "init", "deinit", "sync",
+                  "absorbgitdirs", "set-url", "set-branch"},
     "symbolic-ref": None,  # special-cased: bare read allows
     # `git notes` writes refs/notes/*; list/show forms read.
     "notes": {"add", "append", "copy", "edit", "merge", "remove", "prune"},
@@ -114,6 +115,40 @@ GIT_VALUE_FLAGS = {"-C", "-c", "--config-env", "--namespace", "--exec-path"}
 PUSH_VALUE_FLAGS = {"-o", "--push-option", "--receive-pack", "--exec", "--repo"}
 
 SEPARATORS = {"&&", "||", ";", "|", "&", "\n"}
+
+# Runners that execute their trailing arguments as the real command:
+# `command rm f` must be classified as `rm f`.
+RUNNER_PREFIXES = {"command", "exec", "nohup", "time", "nice"}
+
+
+def peel_runners(seg):
+    while seg:
+        head = os.path.basename(seg[0])
+        if head not in RUNNER_PREFIXES:
+            return seg
+        rest = seg[1:]
+        if head == "command":
+            if any(t in ("-v", "-V") for t in rest):
+                return []  # describe-only: nothing executes
+            while rest and rest[0] == "-p":
+                rest = rest[1:]
+        elif head == "exec":
+            while rest and rest[0].startswith("-"):
+                if rest[0] == "-a" and len(rest) > 1:
+                    rest = rest[2:]
+                else:
+                    rest = rest[1:]
+        elif head == "nice":
+            while rest and rest[0].startswith("-"):
+                if rest[0] == "-n" and len(rest) > 1:
+                    rest = rest[2:]
+                else:
+                    rest = rest[1:]
+        elif head == "time":
+            while rest and rest[0] == "-p":
+                rest = rest[1:]
+        seg = rest
+    return seg
 
 START_HINT = "scripts/agent-lifecycle.sh start <branch>  (fetches, then creates an isolated worktree)"
 
@@ -325,19 +360,29 @@ def is_short_flag_with(tokens, letter):
     return any(re.fullmatch(rf"-[a-zA-Z]*{letter}[a-zA-Z]*", t) for t in tokens)
 
 
-def push_positionals(rest):
-    out, i = [], 0
+def push_remote_and_refspecs(rest):
+    """(remote, refspecs): the repository may arrive as the first positional
+    or via --repo, in which case every positional is a refspec."""
+    repo, out, i = None, [], 0
     while i < len(rest):
         t = rest[i]
         if t in PUSH_VALUE_FLAGS and i + 1 < len(rest):
+            if t == "--repo":
+                repo = rest[i + 1]
             i += 2
+            continue
+        if t.startswith("--repo="):
+            repo = t.split("=", 1)[1]
+            i += 1
             continue
         if t.startswith("-"):
             i += 1
             continue
         out.append(t)
         i += 1
-    return out
+    if repo is None and out:
+        repo, out = out[0], out[1:]
+    return repo, out
 
 
 def check_push(seg_text, rest, primary):
@@ -371,8 +416,8 @@ def check_push(seg_text, rest, primary):
             "publication is exactly one ordinary topic branch per push; pushing all branches or any tags is an owner action",
             "push the one topic branch (`git push origin HEAD`); ask the owner about tags or bulk publication",
         )
-    positionals = push_positionals(rest)
-    if len(positionals) > 2:
+    remote, refspecs = push_remote_and_refspecs(rest)
+    if len(refspecs) > 1:
         deny(
             f"multiple refspecs in one push: `{seg_text}`",
             "publication is exactly one ordinary topic branch per push",
@@ -383,9 +428,9 @@ def check_push(seg_text, rest, primary):
     # tag (`refs/tags/...` destination). The destination is the part after
     # `:`, or the whole refspec when there is none; an unknowable default
     # branch or a bare/`HEAD` destination fails open.
-    if positionals:
-        default = remote_default_branch(primary, positionals[0])
-        for spec in positionals[1:]:
+    if remote is not None:
+        default = remote_default_branch(primary, remote)
+        for spec in refspecs:
             dest = spec.split(":", 1)[1] if ":" in spec else spec
             if dest.startswith("refs/tags/"):
                 deny(
@@ -509,8 +554,14 @@ def check_plain_writers(seg, seg_text, effective, primary):
         # tracked executable bit flip dirties the checkout.
         has_ref = any(t == "--reference" or t.startswith("--reference=")
                       for t in seg[1:])
+        # A symbolic mode may itself start with a dash (`chmod -w f`); mode
+        # letters (ugoa+rwxXst) and option letters (Rcfv) are disjoint, so
+        # such a token is the mode operand, already excluded from
+        # positionals by its dash.
+        dash_mode = any(re.fullmatch(r"-[rwxXstugoa]+", t) for t in seg[1:])
         hit = path_args_hit_primary(
-            positionals if has_ref else positionals[1:], effective, primary)
+            positionals if has_ref or dash_mode else positionals[1:],
+            effective, primary)
     elif head in SHELL_WRITERS_DEST_ONLY:
         positionals, target_dir = writer_args(head, seg[1:])
         if head == "install" and any(t in ("-d", "--directory")
@@ -591,6 +642,7 @@ def check_bash(command, cwd, primary):
                 if resolved is not None:
                     env_dirs.append(resolved)
             seg = seg[1:]
+        seg = peel_runners(seg)
         if not seg:
             continue
         if seg[0] in ("cd", "pushd"):

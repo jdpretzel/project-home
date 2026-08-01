@@ -824,6 +824,14 @@ test_guard_blocks_history_and_repo_surgery() {
     "$(json_bash "git format-patch --stdout HEAD~1" "$primary")"
   guard_case "git format-patch -o elsewhere from the primary checkout" 0 \
     "$(json_bash "git format-patch -o /tmp/patches HEAD~1" "$primary")"
+  # --edit-description writes branch.<name>.description into shared config.
+  guard_case "git branch --edit-description in the primary checkout" 2 \
+    "$(json_bash "git branch --edit-description" "$primary")"
+  # submodule init copies settings into the repository's local config.
+  guard_case "git submodule init in the primary checkout" 2 \
+    "$(json_bash "git submodule init" "$primary")"
+  guard_case "git submodule status in the primary checkout" 0 \
+    "$(json_bash "git submodule status" "$primary")"
 }
 
 test_guard_push_matrix() {
@@ -865,6 +873,13 @@ test_guard_push_matrix() {
     "$(json_bash "git push origin refs/tags/v1" "$guard_wt")"
   guard_case "git push with two refspecs" 2 \
     "$(json_bash "git push origin HEAD:alpha HEAD:beta" "$guard_wt")"
+  # --repo supplies the repository, leaving every positional a refspec.
+  guard_case "git push --repo targeting the default branch" 2 \
+    "$(json_bash "git push --repo=origin main" "$guard_wt")"
+  guard_case "git push --repo with two refspecs" 2 \
+    "$(json_bash "git push --repo origin HEAD:alpha HEAD:beta" "$guard_wt")"
+  guard_case "git push --repo with one topic refspec" 0 \
+    "$(json_bash "git push --repo=origin HEAD:feature" "$guard_wt")"
 }
 
 test_guard_fetch_rules() {
@@ -981,6 +996,20 @@ test_guard_shell_writers() {
     "$(json_bash "install -d $primary/newdir /tmp/other" "$TEST_ROOT")"
   guard_case "install -d entirely outside from a primary cwd" 0 \
     "$(json_bash "install -d /tmp/a /tmp/b" "$primary")"
+  # A leading-dash symbolic mode is the mode operand, not an option.
+  guard_case "chmod -w on a primary file" 2 \
+    "$(json_bash "chmod -w $primary/README.md" "$TEST_ROOT")"
+  guard_case "chmod -w on an outside path from a primary cwd" 0 \
+    "$(json_bash "chmod -w /tmp/x" "$primary")"
+  # Runners execute their trailing arguments as the real command.
+  guard_case "command rm in the primary checkout" 2 \
+    "$(json_bash "command rm f.txt" "$primary")"
+  guard_case "command git commit in the primary checkout" 2 \
+    "$(json_bash "command git commit -m wip" "$primary")"
+  guard_case "nohup git commit in the primary checkout" 2 \
+    "$(json_bash "nohup git commit -m wip" "$primary")"
+  guard_case "command -v is describe-only" 0 \
+    "$(json_bash "command -v git" "$primary")"
 }
 
 test_guard_apply_patch() {
