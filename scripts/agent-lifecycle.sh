@@ -106,7 +106,7 @@ cmd_preflight() {
   branch="$(git branch --show-current)"
   [ -n "$branch" ] || branch="(detached)"
   head="$(git rev-parse --short HEAD)"
-  porcelain="$(git status --porcelain)" || fail "git status failed; state unknown"
+  porcelain="$(git status --porcelain --untracked-files=all)" || fail "git status failed; state unknown"
   dirty="$(printf '%s' "$porcelain" | grep -cv '^??' || true)"
   untracked="$(printf '%s' "$porcelain" | grep -c '^??' || true)"
   if is_primary_checkout; then kind="primary checkout (inspect-only for agents)"; else kind="isolated worktree"; fi
@@ -127,7 +127,12 @@ cmd_preflight() {
   local fetch_head
   fetch_head="$(git rev-parse --git-path FETCH_HEAD)"
   if [ -f "$fetch_head" ]; then
-    fetch_age="$(stat -f '%Sm' "$fetch_head" 2>/dev/null || stat -c '%y' "$fetch_head" 2>/dev/null || echo unknown)"
+    # Chained assignments, not one substitution: on GNU, `stat -f` means
+    # filesystem status, so the BSD probe can print a report to stdout and
+    # still fail — its output must be discarded, not concatenated.
+    fetch_age="$(stat -f '%Sm' "$fetch_head" 2>/dev/null)" || \
+      fetch_age="$(stat -c '%y' "$fetch_head" 2>/dev/null)" || \
+      fetch_age=unknown
     echo "last fetch: $fetch_age"
   else
     echo "last fetch: never (in this checkout)"
@@ -199,6 +204,23 @@ or name the base explicitly with --base <remote-branch>."
     name="$(basename "$primary")"
     dir="$parent/$name-worktrees/$branch"
   fi
+  # A worktree inside the primary checkout would leave the primary holding
+  # untracked mutable state — no longer inspect-only. Resolve the deepest
+  # existing ancestor physically before comparing, so symlinks cannot hide
+  # the nesting.
+  local abs_dir walk suffix=""
+  abs_dir="$dir"
+  [ "${abs_dir#/}" != "$abs_dir" ] || abs_dir="$PWD/$abs_dir"
+  walk="$abs_dir"
+  while [ ! -d "$walk" ] && [ "$walk" != "/" ]; do
+    suffix="/$(basename "$walk")$suffix"
+    walk="$(dirname "$walk")"
+  done
+  walk="$(cd "$walk" && pwd -P)$suffix"
+  case "$walk/" in
+    "$(primary_root)"/*) fail "worktree path '$dir' is inside the primary checkout; place worktrees outside it (default: a sibling <name>-worktrees directory)" ;;
+  esac
+
   [ ! -e "$dir" ] || fail "worktree path '$dir' already exists"
   mkdir -p "$(dirname "$dir")"
 
@@ -222,8 +244,8 @@ cmd_status() {
   echo "branch:   $branch @ $(git rev-parse HEAD)"
   echo "base:     $(recorded_base)"
   echo "$REMOTE/$def: $(git rev-parse "refs/remotes/$REMOTE/$def" 2>/dev/null || echo unknown) (as of last fetch)"
-  if [ -n "$(git status --porcelain)" ]; then
-    git status --porcelain | sed 's/^/dirty:    /'
+  if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
+    git status --porcelain --untracked-files=all | sed 's/^/dirty:    /'
   else
     echo "tree:     clean"
   fi
@@ -245,9 +267,9 @@ cmd_publish_check() {
   [ "$branch" != "$dest" ] || { echo "FAIL: on the target branch '$dest' itself; publication uses a topic branch" >&2; failed=1; }
   [ "$branch" != "$(default_branch)" ] || { echo "FAIL: on the default branch; publication uses a topic branch" >&2; failed=1; }
 
-  if [ -n "$(git status --porcelain)" ]; then
+  if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
     echo "FAIL: working tree not clean — the review and the push would disagree:" >&2
-    git status --porcelain >&2
+    git status --porcelain --untracked-files=all >&2
     failed=1
   fi
 
@@ -285,8 +307,11 @@ cmd_publish_check() {
   local merge_base authority
   merge_base="$(git merge-base "refs/remotes/$REMOTE/$dest" HEAD)" || \
     fail "no merge base with $REMOTE/$dest; cannot classify the outgoing range"
+  # CLAUDE.md/AGENTS.md match at any depth: both harnesses read nested
+  # per-directory instruction files, so a scoped one governs its subtree
+  # with the same authority as the root file.
   authority="$(git diff --name-only --no-renames "$merge_base" HEAD | \
-    grep -E '^(\.claude/|\.codex/|\.github/|\.claude-plugin/|scripts/agent-lifecycle|CLAUDE\.md$|AGENTS\.md$)' || true)"
+    grep -E '^(\.claude/|\.codex/|\.github/|\.claude-plugin/|scripts/agent-lifecycle)|(^|/)(CLAUDE|AGENTS)\.md$' || true)"
   if [ -n "$authority" ]; then
     echo "ATTENDED: this range changes authority-carrying paths:" >&2
     echo "$authority" | sed 's/^/  /' >&2
@@ -344,14 +369,17 @@ cmd_close() {
 
 run_close_proofs() {
   local wt="$1" delete_ignored="${2:-0}"
-  if [ -n "$(git -C "$wt" status --porcelain)" ]; then
-    git -C "$wt" status --porcelain >&2
+  # --untracked-files=all on every proof-bearing status: a repository or
+  # user setting of status.showUntrackedFiles=no would otherwise hide
+  # exactly the files the no-loss proof exists to protect.
+  if [ -n "$(git -C "$wt" status --porcelain --untracked-files=all)" ]; then
+    git -C "$wt" status --porcelain --untracked-files=all >&2
     fail "worktree '$wt' has uncommitted or untracked work; cleanup would lose it"
   fi
   # Ignored files pass the plain porcelain proof but are destroyed with the
   # worktree (.env files, scratch notes, local test data).
   local ignored
-  ignored="$(git -C "$wt" status --porcelain --ignored | grep '^!!' || true)"
+  ignored="$(git -C "$wt" status --porcelain --ignored --untracked-files=all | grep '^!!' || true)"
   if [ -n "$ignored" ] && [ "$delete_ignored" -ne 1 ]; then
     printf '%s\n' "$ignored" >&2
     fail "worktree '$wt' contains ignored files that removal would delete.

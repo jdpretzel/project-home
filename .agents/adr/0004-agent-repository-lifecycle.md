@@ -25,7 +25,10 @@ One lifecycle, three layers, one owner per fact:
 - **`scripts/agent-lifecycle.sh`** owns the Git mechanics. `start` fetches
   `origin` (failing closed — an unresolvable remote base stops mutating
   work; `--offline-base <sha>` is the owner's explicit decision, never an
-  agent's fallback), refreshes `origin/HEAD` so a renamed default branch
+  agent's fallback; a `--dir` inside the primary checkout is refused —
+  a nested worktree would end the primary's inspect-only state, pinned by
+  `test_start_refuses_a_dir_inside_the_primary_checkout`), refreshes
+  `origin/HEAD` so a renamed default branch
   cannot mislead — failing closed when the remote cannot answer and no
   `--base` was named, since continuing on the cached name could base the
   task on a former default (pinned by
@@ -47,7 +50,10 @@ One lifecycle, three layers, one owner per fact:
   pinned by `test_close_refuses_after_the_remote_branch_was_deleted`),
   failing closed if the fetch fails — that there is no dirty, untracked,
   ignored-but-present (without `--delete-ignored`), or remote-unreachable
-  work; never with `--force`. Verifying that the expected PR exists and landed is left to
+  work; never with `--force`. Every proof-bearing status forces
+  `--untracked-files=all`, so `status.showUntrackedFiles=no` in any
+  configuration scope cannot hide the files the proof protects (pinned by
+  `test_close_proof_survives_hidden_untracked_config`). Verifying that the expected PR exists and landed is left to
   the operator or the GitHub layer: `gh` is not reliably runnable in the
   sandboxed sessions this repo measures, and a fresh-fetch reachability
   proof plus the kept branch bounds the loss to zero commits.
@@ -60,9 +66,12 @@ One lifecycle, three layers, one owner per fact:
   the registrations fail closed when `python3` is missing rather than
   silently disarming). The guard denies only high-confidence violations —
   file edits, mutating git commands, and common shell writes (`rm`, `mv`,
-  `cp` destinations — including `-t` target-directory form — `sed -i`,
-  redirections) against the primary checkout, including via `-C`,
-  `--git-dir`, or a `cd` earlier in the command (a `cd` whose target
+  `cp` destinations — including `-t` target-directory form — one-operand
+  `ln` into the cwd, every `sed` in-place spelling (`-i`, `--in-place`,
+  combined `-Ei`), redirections including `&>` and `>|`) against the
+  primary checkout, including via `-C`, `--git-dir`, a
+  `GIT_DIR`/`GIT_WORK_TREE` environment prefix, or a `cd` earlier in the
+  command (a `cd` whose target
   cannot exist keeps the prior directory, since the shell does too —
   pinned in `test_guard_shell_writers`);
   force pushes in any form (flags, `+`/`:` refspecs, `--delete`,
@@ -96,8 +105,10 @@ required for merge/auto-merge, force-push, rewriting published or shared
 history, default-branch pushes, tags, releases, deployment, protection
 bypasses, repository-setting changes, and unattended installs. A range that
 changes authority-carrying paths (`.claude/`, `.codex/`, `.github/`,
-`.claude-plugin/`, the lifecycle scripts, and `CLAUDE.md`/`AGENTS.md` —
-the always-on policy text) needs owner approval before its first push —
+`.claude-plugin/`, the lifecycle scripts, and `CLAUDE.md`/`AGENTS.md` at
+any directory depth — both harnesses read nested per-directory
+instruction files, so a scoped one carries the same authority; pinned by
+`test_publish_check_authority_gate_matches_nested_agents_md`) needs owner approval before its first push —
 such a change alters what a push *does*, which no content review proves
 safe.
 

@@ -356,6 +356,22 @@ test_publish_check_stops_on_authority_paths() {
   assert_output_has "publish-check over a range touching .claude/" "Owner approval is required"
 }
 
+test_publish_check_authority_gate_matches_nested_agents_md() {
+  new_fixture publish-nested-agents
+  local wt
+  run_lifecycle "$primary" start topic
+  assert_status "start" 0
+  wt="$(worktree_from_output "start")"
+  # Both harnesses read nested per-directory instruction files, so a scoped
+  # AGENTS.md carries the same authority as the root one.
+  commit_in_worktree "$wt" "skills/example/AGENTS.md" "scoped instructions"
+
+  run_lifecycle "$wt" publish-check
+  assert_status "publish-check over a nested AGENTS.md" 3
+  assert_output_has "publish-check over a nested AGENTS.md" "ATTENDED:"
+  assert_output_has "publish-check over a nested AGENTS.md" "skills/example/AGENTS.md"
+}
+
 test_publish_check_authority_gate_survives_a_rename() {
   new_fixture publish-authority-rename
   local wt label
@@ -626,6 +642,39 @@ test_close_of_a_detached_worktree_reports_success() {
   assert_missing "close on a detached-HEAD worktree" "$wt"
 }
 
+test_start_refuses_a_dir_inside_the_primary_checkout() {
+  new_fixture start-nested-dir
+  # A worktree nested in the primary would leave the primary holding
+  # untracked mutable state — no longer inspect-only.
+  run_lifecycle "$primary" start topic --dir "$primary/nested"
+  assert_nonzero "start --dir inside the primary checkout"
+  assert_output_has "start --dir inside the primary checkout" "inside the primary checkout"
+  assert_no_branch "start --dir inside the primary checkout" topic
+  [ ! -e "$primary/nested" ] || fail "start --dir inside the primary checkout: nested dir was created"
+
+  # The relative spelling resolves against the cwd (the primary) and must
+  # be caught just the same.
+  run_lifecycle "$primary" start topic --dir nested
+  assert_nonzero "start --dir with a relative path inside the primary"
+  assert_no_branch "start --dir with a relative path inside the primary" topic
+}
+
+test_close_proof_survives_hidden_untracked_config() {
+  new_fixture close-hidden-untracked
+  local wt
+  started_and_published topic
+  printf 'precious\n' >"$wt/scratch.txt"
+  # status.showUntrackedFiles=no hides untracked files from a bare
+  # `status --porcelain`; the proof must force them visible or the removal
+  # destroys the only copy.
+  git -C "$wt" config status.showUntrackedFiles no
+
+  run_lifecycle "$primary" close "$wt"
+  assert_nonzero "close with untracked files hidden by config"
+  assert_output_has "close with untracked files hidden by config" "uncommitted or untracked"
+  [ -f "$wt/scratch.txt" ] || fail "close with untracked files hidden by config: scratch.txt was destroyed"
+}
+
 test_start_fails_when_the_default_branch_cannot_be_refreshed() {
   new_fixture sethead
   # Point the remote's HEAD at a branch that does not exist: the fetch still
@@ -713,6 +762,12 @@ test_guard_blocks_primary_checkout_mutation() {
     "$(json_bash "git -c user.email=a@b commit -m wip" "$primary")"
   guard_case "git --git-dir/--work-tree pointed at the primary checkout" 2 \
     "$(json_bash "git --git-dir=$primary/.git --work-tree=$primary commit -m wip" "$TEST_ROOT")"
+  # Git's repository-selection environment variables re-target the command
+  # just like the flags do.
+  guard_case "GIT_DIR/GIT_WORK_TREE prefix pointed at the primary" 2 \
+    "$(json_bash "GIT_DIR=$primary/.git GIT_WORK_TREE=$primary git reset --hard HEAD" "$TEST_ROOT")"
+  guard_case "a harmless env prefix on an inspection command" 0 \
+    "$(json_bash "GIT_PAGER=cat git log -1" "$primary")"
 }
 
 test_guard_allows_inspection_and_ignores_lookalikes() {
@@ -752,6 +807,11 @@ test_guard_blocks_history_and_repo_surgery() {
     "$(json_bash "git tag v1" "$primary")"
   guard_case "git tag -f moving a tag in the primary checkout" 2 \
     "$(json_bash "git tag -f v1 HEAD~1" "$primary")"
+  # notes writes refs/notes/*; its read forms stay inspection.
+  guard_case "git notes add in the primary checkout" 2 \
+    "$(json_bash "git notes add -m x HEAD" "$primary")"
+  guard_case "git notes list in the primary checkout" 0 \
+    "$(json_bash "git notes list" "$primary")"
 }
 
 test_guard_push_matrix() {
@@ -873,6 +933,21 @@ test_guard_shell_writers() {
     "$(json_bash "cd /definitely-not-here-xyz; git commit -m wip" "$primary")"
   guard_case "mkdir && cd into the new dir leaves the primary" 0 \
     "$(json_bash "mkdir -p /tmp/guard-fresh-dir && cd /tmp/guard-fresh-dir && git commit -m wip" "$primary")"
+  # Every documented in-place spelling, not just BSD's separate -i.
+  guard_case "sed --in-place over a file in the primary checkout" 2 \
+    "$(json_bash "sed --in-place 's/a/b/' $primary/README.md" "$TEST_ROOT")"
+  guard_case "sed -Ei over a file in the primary checkout" 2 \
+    "$(json_bash "sed -Ei 's/a/b/' $primary/README.md" "$TEST_ROOT")"
+  # Bash's other write redirections tokenize as single punctuation runs.
+  guard_case "a &> redirection into the primary checkout" 2 \
+    "$(json_bash "echo x &> $primary/f" "$TEST_ROOT")"
+  guard_case "a >| redirection into the primary checkout" 2 \
+    "$(json_bash "echo x >| $primary/f" "$TEST_ROOT")"
+  # One-operand ln writes basename(target) into the cwd, not the operand.
+  guard_case "one-operand ln from a primary cwd" 2 \
+    "$(json_bash "ln -s /tmp/target" "$primary")"
+  guard_case "one-operand ln from outside the primary" 0 \
+    "$(json_bash "ln -s /tmp/target" "$TEST_ROOT")"
 }
 
 test_guard_apply_patch() {
@@ -916,9 +991,11 @@ test_start_offline_base_records_a_named_base_ref
 test_start_refuses_an_existing_branch
 test_start_refuses_a_branch_already_on_the_remote
 test_start_fails_when_the_default_branch_cannot_be_refreshed
+test_start_refuses_a_dir_inside_the_primary_checkout
 test_start_base_ref_is_recorded_and_retargets_publish_check
 test_publish_check_rejects_a_dirty_tree
 test_publish_check_stops_on_authority_paths
+test_publish_check_authority_gate_matches_nested_agents_md
 test_publish_check_authority_gate_survives_a_rename
 test_publish_check_authority_gate_covers_claude_md
 test_publish_check_passes_a_clean_range_and_reports_advance
@@ -927,6 +1004,7 @@ test_publish_check_warns_on_an_unrecorded_base
 test_close_refuses_a_dirty_worktree
 test_close_refuses_an_unpushed_head
 test_close_refuses_ignored_files_until_asked
+test_close_proof_survives_hidden_untracked_config
 test_close_normalizes_the_worktree_path
 test_close_fails_closed_when_the_remote_is_unreachable
 test_close_removes_a_pushed_worktree_and_keeps_the_branch

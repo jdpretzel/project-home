@@ -11,7 +11,8 @@ detected fact, the violated rule, and the exact safe next action:
 
   1. file edits (and apply_patch targets) inside the primary checkout;
   2. mutating git commands run against the primary checkout, including
-     via -C, --git-dir/--work-tree, or a `cd` earlier in the command;
+     via -C, --git-dir/--work-tree, a GIT_DIR/GIT_WORK_TREE environment
+     prefix, or a `cd` earlier in the command;
   3. force pushes — flags or `+`/`:`-refspecs — remote deletions, and
      pushes whose refspec destination is the remote's default branch,
      anywhere (published history and the default branch are the owner's);
@@ -62,6 +63,8 @@ CONDITIONAL_GIT = {
     "submodule": {"update", "add", "deinit", "sync", "absorbgitdirs",
                   "set-url", "set-branch"},
     "symbolic-ref": None,  # special-cased: bare read allows
+    # `git notes` writes refs/notes/*; list/show forms read.
+    "notes": {"add", "append", "copy", "edit", "merge", "remove", "prune"},
     # Plain `fetch` (with or without --prune) converges local remote-tracking
     # refs toward the remote's authoritative state — the lifecycle itself
     # prescribes pruned fetches as evidence hygiene, so it stays allowed
@@ -471,18 +474,33 @@ def check_plain_writers(seg, seg_text, effective, primary):
         hit = path_args_hit_primary(positionals, effective, primary)
     elif head in SHELL_WRITERS_DEST_ONLY:
         positionals, target_dir = writer_args(head, seg[1:])
-        dests = [target_dir] if target_dir is not None else positionals[-1:]
+        if target_dir is not None:
+            dests = [target_dir]
+        elif head == "ln" and len(positionals) == 1:
+            # One-operand `ln -s /tmp/target` creates basename(target) in
+            # the current directory — the operand itself is only read.
+            dests = [os.path.join(effective, os.path.basename(positionals[0]))] \
+                if effective else []
+        else:
+            dests = positionals[-1:]
         if dests:
             hit = path_args_hit_primary(dests, effective, primary)
-    elif head == "sed" and any(t == "-i" or t.startswith("-i") for t in seg[1:]):
+    elif head == "sed" and any(
+            t == "--in-place" or t.startswith("--in-place=")
+            or (t.startswith("-i") and not t.startswith("--"))
+            # combined short flags carry it too: `sed -Ei 's/a/b/' file`
+            or (re.fullmatch(r"-[a-zA-Z]+", t) and "i" in t[1:])
+            for t in seg[1:]):
         # The sed expression also looks like a relative path; only count
         # arguments that exist as files so `s/a/b/` can't false-match.
         hit = path_args_hit_primary(seg[1:], effective, primary, must_exist=True)
     if hit:
         deny_primary(f"`{seg_text}` writing {hit}, inside the primary checkout at {primary}")
 
+    # Bash's other write redirections tokenize as single punctuation runs:
+    # `&>`/`&>>` (stdout+stderr) and `>|` (clobbering).
     for i, tok in enumerate(seg):
-        if tok in (">", ">>") and i + 1 < len(seg):
+        if tok in (">", ">>", "&>", "&>>", ">|") and i + 1 < len(seg):
             target = seg[i + 1]
             resolved = target if os.path.isabs(target) else (
                 os.path.join(effective, target) if effective else None)
@@ -516,7 +534,22 @@ def check_bash(command, cwd, primary):
             effective = None
             continue
         seg_text = " ".join(seg)
-        if seg and seg[0] in ("cd", "pushd"):
+        # Leading VAR=value assignments would hide the real command word —
+        # and Git's own repository-selection variables re-target it
+        # (`GIT_DIR=<primary>/.git git reset --hard`), so their values count
+        # as operating directories.
+        env_dirs = []
+        while seg and seg != RESET \
+                and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", seg[0]):
+            var, val = seg[0].split("=", 1)
+            if var in ("GIT_DIR", "GIT_WORK_TREE"):
+                resolved = resolve_dir(effective, val)
+                if resolved is not None:
+                    env_dirs.append(resolved)
+            seg = seg[1:]
+        if not seg:
+            continue
+        if seg[0] in ("cd", "pushd"):
             target = resolve_dir(effective, seg[1] if len(seg) > 1 else None)
             if target is None:
                 effective = None  # statically unresolvable: documented fail-open
@@ -573,6 +606,7 @@ def check_bash(command, cwd, primary):
             resolved = resolve_dir(effective, d)
             if resolved is not None:
                 targets.append(resolved)
+        targets.extend(env_dirs)
 
         hits_primary = any(inside(t, primary) for t in targets)
         if hits_primary:
