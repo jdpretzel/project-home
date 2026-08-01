@@ -28,7 +28,7 @@ Everything else — bisection, hypothesis-testing, instrumentation — is mechan
 
 It gives you a ladder of ways to build that loop — failing test, curl script, CLI diff, headless browser, replayed trace, throwaway harness, fuzz loop, `git bisect run`, differential run — and, only as a last resort, a human-in-the-loop bash script. For non-deterministic bugs the goal isn't a clean repro but a **higher reproduction rate**: loop the trigger, parallelise, add stress until the flake is debuggable.
 
-Diagnosis reads; the fix mutates. So where the repo provides a lifecycle entry — a script like `scripts/agent-lifecycle.sh` that starts work in an isolated worktree — the fix-and-regression-test phase happens in a worktree it started, not in the primary checkout you were reading from.
+Diagnosis mutates sooner than you'd think — failing tests, fixtures, throwaway harnesses, instrumentation — so where the repo provides a lifecycle entry (a script like `scripts/agent-lifecycle.sh` that starts work in an isolated worktree), the skill enters it before Phase 1, and everything from the repro to the fix happens in that worktree, never in the primary checkout.
 
 ## It's working if
 

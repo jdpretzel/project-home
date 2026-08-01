@@ -626,6 +626,25 @@ test_close_of_a_detached_worktree_reports_success() {
   assert_missing "close on a detached-HEAD worktree" "$wt"
 }
 
+test_start_fails_when_the_default_branch_cannot_be_refreshed() {
+  new_fixture sethead
+  # Point the remote's HEAD at a branch that does not exist: the fetch still
+  # succeeds, but the remote can no longer answer "what is the default
+  # branch?" — exactly the case where continuing on the cached name could
+  # base the task on a former default.
+  git -C "$remote" symbolic-ref HEAD refs/heads/ghost
+
+  run_lifecycle "$primary" start topic
+  assert_nonzero "start with an unanswerable remote HEAD"
+  assert_output_has "start with an unanswerable remote HEAD" "could not refresh"
+  assert_no_branch "start with an unanswerable remote HEAD" topic
+
+  # With --base the cached default-branch name is never consulted, so the
+  # same broken remote HEAD must not stop an explicitly-based start.
+  run_lifecycle "$primary" start topic --base main
+  assert_status "start --base with an unanswerable remote HEAD" 0
+}
+
 # --- guard --------------------------------------------------------------------
 
 json_file_tool() { # tool, file_path, cwd
@@ -753,12 +772,63 @@ test_guard_push_matrix() {
     "$(json_bash "git push origin HEAD" "$guard_wt")"
   guard_case "plain git push with an explicit refspec" 0 \
     "$(json_bash "git push origin HEAD:refs/heads/x" "$guard_wt")"
+  # An ordinary refspec landing on the remote default branch is still an
+  # owner action, in every spelling.
+  guard_case "git push HEAD:main targeting the default branch" 2 \
+    "$(json_bash "git push origin HEAD:main" "$guard_wt")"
+  guard_case "git push naming the default branch as the refspec" 2 \
+    "$(json_bash "git push origin main" "$guard_wt")"
+  guard_case "git push with a refs/heads/ default-branch destination" 2 \
+    "$(json_bash "git push origin HEAD:refs/heads/main" "$guard_wt")"
+  guard_case "git push -o value not mistaken for the remote positional" 0 \
+    "$(json_bash "git push -o ci.skip origin HEAD:feature" "$guard_wt")"
+}
+
+test_guard_fetch_rules() {
+  guard_fixture
+  # Plain and pruned fetches converge toward the remote's authoritative
+  # state — the lifecycle's own evidence hygiene — and stay allowed even in
+  # the primary checkout.
+  guard_case "plain git fetch in the primary checkout" 0 \
+    "$(json_bash "git fetch origin" "$primary")"
+  guard_case "git fetch --prune in the primary checkout" 0 \
+    "$(json_bash "git fetch --prune origin" "$primary")"
+  # Forms that write outside refs/remotes/ are mutations wherever they run:
+  # a src:dst refspec updates local branches, --prune-tags deletes local tags.
+  guard_case "git fetch writing a local branch in the primary checkout" 2 \
+    "$(json_bash "git fetch origin main:main" "$primary")"
+  guard_case "git fetch --prune-tags in the primary checkout" 2 \
+    "$(json_bash "git fetch --prune-tags origin" "$primary")"
+  guard_case "git fetch writing a local branch from a worktree" 2 \
+    "$(json_bash "git fetch origin main:scratch" "$guard_wt")"
+  guard_case "plain git fetch from a worktree" 0 \
+    "$(json_bash "git fetch origin" "$guard_wt")"
+}
+
+test_guard_shared_state_from_worktrees() {
+  guard_fixture
+  # Linked worktrees share the primary's .git/config and refs; writing them
+  # from a worktree is primary mutation in another coat.
+  guard_case "git config write from a worktree" 2 \
+    "$(json_bash "git config core.hooksPath /tmp/hooks" "$guard_wt")"
+  guard_case "git remote set-url from a worktree" 2 \
+    "$(json_bash "git remote set-url origin /elsewhere" "$guard_wt")"
+  guard_case "git config --worktree write from a worktree" 0 \
+    "$(json_bash "git config --worktree foo.bar x" "$guard_wt")"
+  guard_case "git config --get from a worktree" 0 \
+    "$(json_bash "git config --get user.name" "$guard_wt")"
+  guard_case "git remote -v from a worktree" 0 \
+    "$(json_bash "git remote -v" "$guard_wt")"
 }
 
 test_guard_worktree_rules() {
   guard_fixture
   guard_case "git worktree remove --force" 2 \
     "$(json_bash "git worktree remove --force $guard_wt" "$TEST_ROOT")"
+  # Unforced removal is no safer: it skips close's loss proofs and still
+  # deletes ignored files.
+  guard_case "git worktree remove without --force" 2 \
+    "$(json_bash "git worktree remove $guard_wt" "$TEST_ROOT")"
   guard_case "git worktree add without an explicit base" 2 \
     "$(json_bash "git worktree add ../x" "$TEST_ROOT")"
   guard_case "git worktree add with an explicit base" 0 \
@@ -789,6 +859,20 @@ test_guard_shell_writers() {
     "$(json_bash "echo x > $primary/f" "$TEST_ROOT")"
   guard_case "a redirection writing elsewhere from a primary cwd" 0 \
     "$(json_bash "echo x > /tmp/f" "$primary")"
+  # GNU `-t DIR` puts the destination first; the last positional is a source.
+  guard_case "cp -t into the primary checkout" 2 \
+    "$(json_bash "cp -t $primary /tmp/file" "$TEST_ROOT")"
+  guard_case "cp -t elsewhere reading from the primary checkout" 0 \
+    "$(json_bash "cp -t /tmp $primary/README.md" "$TEST_ROOT")"
+  # `-d yesterday` is a date, not a relative path under the checkout.
+  guard_case "touch -d with a date value from a primary cwd" 0 \
+    "$(json_bash "touch -d yesterday /tmp/outside" "$primary")"
+  # A cd that will fail at runtime leaves the shell — and so the guard's
+  # effective directory — where it was.
+  guard_case "cd to a missing dir keeps the primary cwd" 2 \
+    "$(json_bash "cd /definitely-not-here-xyz; git commit -m wip" "$primary")"
+  guard_case "mkdir && cd into the new dir leaves the primary" 0 \
+    "$(json_bash "mkdir -p /tmp/guard-fresh-dir && cd /tmp/guard-fresh-dir && git commit -m wip" "$primary")"
 }
 
 test_guard_apply_patch() {
@@ -831,6 +915,7 @@ test_start_offline_base_skips_the_fetch
 test_start_offline_base_records_a_named_base_ref
 test_start_refuses_an_existing_branch
 test_start_refuses_a_branch_already_on_the_remote
+test_start_fails_when_the_default_branch_cannot_be_refreshed
 test_start_base_ref_is_recorded_and_retargets_publish_check
 test_publish_check_rejects_a_dirty_tree
 test_publish_check_stops_on_authority_paths
@@ -851,6 +936,8 @@ test_guard_blocks_primary_checkout_mutation
 test_guard_allows_inspection_and_ignores_lookalikes
 test_guard_blocks_history_and_repo_surgery
 test_guard_push_matrix
+test_guard_fetch_rules
+test_guard_shared_state_from_worktrees
 test_guard_worktree_rules
 test_guard_shell_writers
 test_guard_apply_patch

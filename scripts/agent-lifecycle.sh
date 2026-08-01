@@ -169,8 +169,15 @@ cmd_start() {
     fetch_or_fail
     # Fetch does not refresh the cached notion of the remote's default
     # branch; re-ask the remote so a renamed default cannot mislead us.
-    git remote set-head "$REMOTE" --auto >/dev/null 2>&1 || \
-      echo "note: could not refresh $REMOTE/HEAD; using the cached default-branch name" >&2
+    # When the answer is the base (no --base), a failed refresh fails the
+    # start: continuing on the cached name could base the task on a former
+    # default branch while claiming to have resolved the current one.
+    if [ -z "$base_ref" ]; then
+      git remote set-head "$REMOTE" --auto >/dev/null 2>&1 || \
+        fail "could not refresh $REMOTE/HEAD, so the current default branch is
+unknown and the cached name may be stale. Retry when the remote can answer,
+or name the base explicitly with --base <remote-branch>."
+    fi
     local ref="${base_ref:-$(default_branch)}"
     base_sha="$(git rev-parse --verify --quiet "refs/remotes/$REMOTE/$ref^{commit}")" || \
       fail "'$REMOTE/$ref' does not resolve after fetch; name the base with --base <remote-branch>"

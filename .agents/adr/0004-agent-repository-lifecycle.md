@@ -26,7 +26,11 @@ One lifecycle, three layers, one owner per fact:
   `origin` (failing closed — an unresolvable remote base stops mutating
   work; `--offline-base <sha>` is the owner's explicit decision, never an
   agent's fallback), refreshes `origin/HEAD` so a renamed default branch
-  cannot mislead, resolves the remote default branch (or `--base`) to an
+  cannot mislead — failing closed when the remote cannot answer and no
+  `--base` was named, since continuing on the cached name could base the
+  task on a former default (pinned by
+  `test_start_fails_when_the_default_branch_cannot_be_refreshed`) —
+  resolves the remote default branch (or `--base`) to an
   exact commit, refuses a topic name that already exists locally *or* on
   the remote (publishing would append to someone's published branch;
   pinned by `test_start_refuses_a_branch_already_on_the_remote`),
@@ -56,11 +60,24 @@ One lifecycle, three layers, one owner per fact:
   the registrations fail closed when `python3` is missing rather than
   silently disarming). The guard denies only high-confidence violations —
   file edits, mutating git commands, and common shell writes (`rm`, `mv`,
-  `cp` destinations, `sed -i`, redirections) against the primary checkout,
-  including via `-C`, `--git-dir`, or a `cd` earlier in the command; force
-  pushes in any form (flags, `+`/`:` refspecs, `--delete`, `--mirror`);
-  forced worktree removal; and implicit-base `git worktree add` — and every
-  denial states the fact, the rule, and the exact safe next action.
+  `cp` destinations — including `-t` target-directory form — `sed -i`,
+  redirections) against the primary checkout, including via `-C`,
+  `--git-dir`, or a `cd` earlier in the command (a `cd` whose target
+  cannot exist keeps the prior directory, since the shell does too —
+  pinned in `test_guard_shell_writers`);
+  force pushes in any form (flags, `+`/`:` refspecs, `--delete`,
+  `--mirror`) and ordinary refspecs whose destination is the remote
+  default branch (`git push origin HEAD:main` — pinned in
+  `test_guard_push_matrix`); every `git worktree remove` (only `close`
+  runs the loss proofs, and even unforced removal deletes ignored files);
+  shared-state mutation from linked worktrees, which share the primary's
+  config and refs — `config` writes (except `--worktree` scope), `remote`
+  rewrites, and `fetch` forms that write outside `refs/remotes/`
+  (plain and `--prune` fetches stay allowed everywhere as evidence
+  hygiene; pinned in `test_guard_fetch_rules` and
+  `test_guard_shared_state_from_worktrees`); and implicit-base
+  `git worktree add` — and every denial states the fact, the rule, and
+  the exact safe next action.
   Configuration files stay separate per harness; the executable policy is
   shared. In both harnesses a repo's hooks become active only after the
   owner has reviewed and trusted them in that harness (Claude: workspace
@@ -124,7 +141,10 @@ registrations share one guard with no translation layer. Known coverage gaps, re
   cannot be resolved statically (variables, substitutions), commands inside
   command substitutions, unbalanced quotes, and file writes performed by
   interpreters (`python -c`, `perl -e`) rather than the covered shell
-  writers.
+  writers. Shared-ref writes from linked worktrees are denied only for
+  the named subcommands (`config`, `remote`, branch-writing `fetch`);
+  `git branch`/`git tag` from a worktree also write shared refs and are
+  not denied — recorded as a gap, not claimed as coverage.
 - The doc-writing flows (`research`, `domain-modeling`, and
   `grill-with-docs`, which drives it) carry no per-skill lifecycle pointer:
   in this repo the always-on invariant and the hooks already route them,

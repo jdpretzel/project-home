@@ -12,9 +12,16 @@ detected fact, the violated rule, and the exact safe next action:
   1. file edits (and apply_patch targets) inside the primary checkout;
   2. mutating git commands run against the primary checkout, including
      via -C, --git-dir/--work-tree, or a `cd` earlier in the command;
-  3. force pushes — flags or `+`/`:`-refspecs — and remote deletions,
-     anywhere (published history is never rewritten unattended);
-  4. `git worktree remove --force`, anywhere (it can destroy work).
+  3. force pushes — flags or `+`/`:`-refspecs — remote deletions, and
+     pushes whose refspec destination is the remote's default branch,
+     anywhere (published history and the default branch are the owner's);
+  4. `git worktree remove`, anywhere (outside `close` it skips the
+     dirty/ignored/unpushed loss proofs; ordinary removal still deletes
+     ignored files);
+  5. shared-state mutations from a linked worktree of the primary —
+     `config` writes (except `--worktree` scope), `remote` rewrites, and
+     `fetch` refspecs that write outside refs/remotes/ — because linked
+     worktrees share the primary repository's config and refs.
 
 This is mistake prevention for agents, not an adversarial security
 boundary. The documented fail-open cases (a miss means an allow, never a
@@ -55,6 +62,13 @@ CONDITIONAL_GIT = {
     "submodule": {"update", "add", "deinit", "sync", "absorbgitdirs",
                   "set-url", "set-branch"},
     "symbolic-ref": None,  # special-cased: bare read allows
+    # Plain `fetch` (with or without --prune) converges local remote-tracking
+    # refs toward the remote's authoritative state — the lifecycle itself
+    # prescribes pruned fetches as evidence hygiene, so it stays allowed
+    # everywhere. What a fetch must not do is write outside refs/remotes/:
+    # a `src:dst` refspec (or --refmap) can update local branches, and
+    # --prune-tags deletes local tags the remote never had.
+    "fetch": None,  # special-cased: only ref-writing forms mutate
 }
 
 CONFIG_READ_FLAGS = {"--get", "--get-all", "--get-regexp", "--get-urlmatch",
@@ -71,7 +85,26 @@ SHELL_WRITERS_ALL_ARGS = {"rm", "rmdir", "touch", "mkdir", "truncate", "tee",
                           "mv"}
 SHELL_WRITERS_DEST_ONLY = {"cp", "ln", "install"}
 
+# Options whose separate value is not a written path (`touch -d yesterday`,
+# `install -m 644`): consumed before the path scan so the guard stays limited
+# to actual write targets. `mv -t DIR` is deliberately absent — its value IS
+# a written destination, and mv's all-arguments scan must keep seeing it.
+WRITER_VALUE_OPTS = {
+    "touch": {"-d", "--date", "-r", "--reference", "-t"},
+    "truncate": {"-s", "--size", "-r", "--reference"},
+    "mkdir": {"-m", "--mode"},
+    "mv": {"-S", "--suffix"},
+    "cp": {"-S", "--suffix"},
+    "ln": {"-S", "--suffix"},
+    "install": {"-m", "--mode", "-o", "--owner", "-g", "--group",
+                "-S", "--suffix", "--strip-program"},
+}
+
 GIT_VALUE_FLAGS = {"-C", "-c", "--config-env", "--namespace", "--exec-path"}
+
+# `git push` flags that take a separate value; without consuming them the
+# value would be misread as the remote positional.
+PUSH_VALUE_FLAGS = {"-o", "--push-option", "--receive-pack", "--exec", "--repo"}
 
 SEPARATORS = {"&&", "||", ";", "|", "&", "\n"}
 
@@ -108,6 +141,18 @@ def deny_primary(fact):
          START_HINT)
 
 
+def deny_shared(fact):
+    # Same override as deny_primary: shared state IS primary .git state, so
+    # the owner's inline escape hatch covers it.
+    if primary_override():
+        return
+    deny(fact,
+         "linked worktrees share the primary repository's config and refs; "
+         "mutating shared state is primary-checkout mutation",
+         "use per-worktree scope (`git config --worktree`) for worktree-local "
+         "settings; ask the owner before changing shared config, remotes, or refs")
+
+
 def find_primary_root():
     """The primary checkout is the one whose .git is a directory.
 
@@ -132,6 +177,51 @@ def find_primary_root():
             idx = gitdir.find(marker)
             if idx != -1:
                 return os.path.realpath(gitdir[:idx])
+    return None
+
+
+def linked_worktree_of(path, primary):
+    """True when path lies inside a linked worktree of the primary repo —
+    such a worktree shares the primary's .git/config and refs, so shared-state
+    mutations from it are primary mutations. Walks up to the first .git entry
+    (a .git *file* whose gitdir points into <primary>/.git/worktrees/)."""
+    current = os.path.realpath(path)
+    while True:
+        dot_git = os.path.join(current, ".git")
+        if os.path.isdir(dot_git):
+            return False  # a full repository of its own
+        if os.path.isfile(dot_git):
+            try:
+                with open(dot_git, encoding="utf-8") as f:
+                    content = f.read().strip()
+            except OSError:
+                return False
+            if content.startswith("gitdir:"):
+                gitdir = content[len("gitdir:"):].strip()
+                marker = f"{os.sep}.git{os.sep}worktrees{os.sep}"
+                idx = gitdir.find(marker)
+                if idx != -1:
+                    return os.path.realpath(gitdir[:idx]) == primary
+            return False
+        parent = os.path.dirname(current)
+        if parent == current:
+            return False
+        current = parent
+
+
+def remote_default_branch(primary, remote):
+    """The branch the remote's HEAD names, read from the primary checkout's
+    refs/remotes/<remote>/HEAD symref file; None when unknowable (URL remotes,
+    reftable storage, no such file) — an unknowable default fails open."""
+    head = os.path.join(primary, ".git", "refs", "remotes", remote, "HEAD")
+    try:
+        with open(head, encoding="utf-8") as f:
+            content = f.read().strip()
+    except OSError:
+        return None
+    prefix = f"ref: refs/remotes/{remote}/"
+    if content.startswith(prefix):
+        return content[len(prefix):]
     return None
 
 
@@ -228,7 +318,22 @@ def is_short_flag_with(tokens, letter):
     return any(re.fullmatch(rf"-[a-zA-Z]*{letter}[a-zA-Z]*", t) for t in tokens)
 
 
-def check_push(seg_text, rest):
+def push_positionals(rest):
+    out, i = [], 0
+    while i < len(rest):
+        t = rest[i]
+        if t in PUSH_VALUE_FLAGS and i + 1 < len(rest):
+            i += 2
+            continue
+        if t.startswith("-"):
+            i += 1
+            continue
+        out.append(t)
+        i += 1
+    return out
+
+
+def check_push(seg_text, rest, primary):
     if any(t == "--force" or t.startswith("--force-with-lease")
            or t.startswith("--force-if-includes") for t in rest) \
             or is_short_flag_with([t for t in rest if re.fullmatch(r"-[a-zA-Z]+", t)], "f"):
@@ -250,11 +355,41 @@ def check_push(seg_text, rest):
             "deleting remote refs — including via `--prune`, which removes every remote ref absent locally — is an owner action",
             "leave remote refs in place; ask the owner to delete branches",
         )
+    # An ordinary refspec can still land on the remote's default branch
+    # (`git push origin HEAD:main`, `git push origin main`). The destination
+    # is the part after `:`, or the whole refspec when there is none; an
+    # unknowable default branch or a bare/`HEAD` destination fails open.
+    positionals = push_positionals(rest)
+    if positionals:
+        default = remote_default_branch(primary, positionals[0])
+        if default:
+            for spec in positionals[1:]:
+                dest = spec.split(":", 1)[1] if ":" in spec else spec
+                if dest.startswith("refs/heads/"):
+                    dest = dest[len("refs/heads/"):]
+                if dest == default:
+                    deny(
+                        f"a push targeting the remote default branch '{default}': `{seg_text}`",
+                        "default-branch pushes are the owner's; agent work lands by PR",
+                        "push a topic branch (`git push origin HEAD`) and open a draft PR",
+                    )
 
 
 def conditional_mutates(sub, rest):
     if sub == "config":
         return not any(t in CONFIG_READ_FLAGS for t in rest)
+    if sub == "fetch":
+        # Only forms that write outside refs/remotes/ mutate: a refspec with
+        # a destination elsewhere (updates local branches), --refmap (rewrites
+        # where fetched refs land), or --prune-tags (deletes local tags).
+        if any(t == "--prune-tags" or t.startswith("--refmap") for t in rest):
+            return True
+        for t in rest:
+            if t.startswith("-") or ":" not in t:
+                continue
+            if not t.split(":", 1)[1].startswith("refs/remotes/"):
+                return True
+        return False
     if sub == "symbolic-ref":
         # bare `symbolic-ref NAME` reads; a second non-flag arg writes
         positional = [t for t in rest if not t.startswith("-")]
@@ -300,15 +435,45 @@ def path_args_hit_primary(tokens, effective, primary, must_exist=False):
     return None
 
 
+def writer_args(head, args):
+    """Split a writer's arguments into (positionals, target_dir), consuming
+    the options whose value is not a written path and capturing a
+    `-t`/`--target-directory` destination when present."""
+    value_opts = WRITER_VALUE_OPTS.get(head, set())
+    positionals, target_dir, i = [], None, 0
+    while i < len(args):
+        t = args[i]
+        if head in SHELL_WRITERS_DEST_ONLY:
+            # GNU form: `cp -t DIR SOURCE...` — the directory is the
+            # destination and every positional after it is a source.
+            if t in ("-t", "--target-directory") and i + 1 < len(args):
+                target_dir = args[i + 1]
+                i += 2
+                continue
+            if t.startswith("--target-directory="):
+                target_dir = t.split("=", 1)[1]
+                i += 1
+                continue
+        if t in value_opts and i + 1 < len(args):
+            i += 2
+            continue
+        if not t.startswith("-"):
+            positionals.append(t)
+        i += 1
+    return positionals, target_dir
+
+
 def check_plain_writers(seg, seg_text, effective, primary):
     head = os.path.basename(seg[0])
     hit = None
     if head in SHELL_WRITERS_ALL_ARGS:
-        hit = path_args_hit_primary(seg[1:], effective, primary)
+        positionals, _ = writer_args(head, seg[1:])
+        hit = path_args_hit_primary(positionals, effective, primary)
     elif head in SHELL_WRITERS_DEST_ONLY:
-        positionals = [t for t in seg[1:] if not t.startswith("-")]
-        if positionals:
-            hit = path_args_hit_primary(positionals[-1:], effective, primary)
+        positionals, target_dir = writer_args(head, seg[1:])
+        dests = [target_dir] if target_dir is not None else positionals[-1:]
+        if dests:
+            hit = path_args_hit_primary(dests, effective, primary)
     elif head == "sed" and any(t == "-i" or t.startswith("-i") for t in seg[1:]):
         # The sed expression also looks like a relative path; only count
         # arguments that exist as files so `s/a/b/` can't false-match.
@@ -345,14 +510,31 @@ def worktree_add_lacks_base(rest):
 
 def check_bash(command, cwd, primary):
     effective = cwd or None
+    made_dirs = set()
     for seg in token_segments(command):
         if seg == RESET:
             effective = None
             continue
         seg_text = " ".join(seg)
         if seg and seg[0] in ("cd", "pushd"):
-            effective = resolve_dir(effective, seg[1] if len(seg) > 1 else None)
+            target = resolve_dir(effective, seg[1] if len(seg) > 1 else None)
+            if target is None:
+                effective = None  # statically unresolvable: documented fail-open
+            elif os.path.isdir(os.path.realpath(target)) \
+                    or os.path.normpath(target) in made_dirs:
+                effective = target
+            # else: the cd will fail at runtime and the shell keeps its
+            # directory (`cd /missing; git commit` still runs here), so the
+            # effective directory must not change either.
             continue
+        if os.path.basename(seg[0]) == "mkdir":
+            # A directory this very command creates is a valid later cd
+            # target (`mkdir -p x && cd x && ...`) even though it does not
+            # exist at guard time.
+            for t in seg[1:]:
+                r = resolve_dir(effective, t)
+                if r is not None:
+                    made_dirs.add(os.path.normpath(r))
 
         parsed = parse_git(seg)
         if parsed is None:
@@ -368,15 +550,16 @@ def check_bash(command, cwd, primary):
             )
 
         if sub == "push":
-            check_push(seg_text, rest)
+            check_push(seg_text, rest, primary)
 
-        if sub == "worktree" and "remove" in rest and (
-                "--force" in rest
-                or is_short_flag_with([t for t in rest if re.fullmatch(r"-[a-zA-Z]+", t)], "f")):
+        # Any `worktree remove`, forced or not: Git happily removes a clean
+        # worktree that still holds ignored files, and nothing here has run
+        # close's unpushed/dirty/ignored loss proofs.
+        if sub == "worktree" and "remove" in rest:
             deny(
-                f"`git worktree remove --force`: `{seg_text}`",
-                "forced worktree removal can destroy uncommitted or unpushed work",
-                "run `scripts/agent-lifecycle.sh close <path>` — it proves nothing is lost, then removes without force",
+                f"`git worktree remove`: `{seg_text}`",
+                "worktree removal outside the lifecycle skips close's loss proofs; even unforced removal deletes ignored files",
+                "run `scripts/agent-lifecycle.sh close <path>` — it proves nothing is lost, then removes",
             )
 
         # Where does this git invocation actually operate?
@@ -392,12 +575,19 @@ def check_bash(command, cwd, primary):
                 targets.append(resolved)
 
         hits_primary = any(inside(t, primary) for t in targets)
-        if not hits_primary:
-            continue
-        if sub in MUTATING_GIT:
-            deny_primary(f"`git {sub}` running against the primary checkout at {primary}")
-        elif sub in CONDITIONAL_GIT and conditional_mutates(sub, rest):
-            deny_primary(f"`git {sub} {' '.join(rest[:3])}` mutating the primary checkout at {primary}")
+        if hits_primary:
+            if sub in MUTATING_GIT:
+                deny_primary(f"`git {sub}` running against the primary checkout at {primary}")
+            elif sub in CONDITIONAL_GIT and conditional_mutates(sub, rest):
+                deny_primary(f"`git {sub} {' '.join(rest[:3])}` mutating the primary checkout at {primary}")
+        elif sub in ("config", "remote", "fetch") \
+                and conditional_mutates(sub, rest) \
+                and not (sub == "config" and "--worktree" in rest) \
+                and any(linked_worktree_of(t, primary) for t in targets):
+            # Linked worktrees share the primary's .git/config and refs:
+            # `git config core.hooksPath` or `git remote set-url` from one
+            # rewrites owner-controlled shared state all the same.
+            deny_shared(f"`git {sub} {' '.join(rest[:3])}` mutating shared repository state from a linked worktree of {primary}")
 
 
 def apply_patch_targets(tool_input):
