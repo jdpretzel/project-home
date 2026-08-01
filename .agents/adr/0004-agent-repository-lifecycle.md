@@ -23,26 +23,44 @@ publication, and cleanup had no owner.
 One lifecycle, three layers, one owner per fact:
 
 - **`scripts/agent-lifecycle.sh`** owns the Git mechanics. `start` fetches
-  `origin` (failing closed — an unresolvable remote base stops mutating work;
-  `--offline-base <sha>` is an explicit operator choice, never a silent
-  fallback), resolves the remote default branch (or `--base`) to an exact
-  commit, creates an isolated worktree there, and records the base object ID
-  in the worktree's gitdir. `publish-check` re-fetches, requires a clean tree
-  and a non-default topic branch, exposes base advancement, and exits
-  specially on authority-carrying paths. `close` removes a worktree only
-  after proving there is no dirty, untracked, or remote-unreachable work —
-  never with `--force`.
+  `origin` (failing closed — an unresolvable remote base stops mutating
+  work; `--offline-base <sha>` is the owner's explicit decision, never an
+  agent's fallback), refreshes `origin/HEAD` so a renamed default branch
+  cannot mislead, resolves the remote default branch (or `--base`) to an
+  exact commit, creates an isolated worktree there, and records the base
+  object ID *and* base ref in the worktree's gitdir — `publish-check` later
+  targets that ref, so integration-branch work is not misdirected at the
+  default branch. `publish-check` re-fetches, requires a clean tree and a
+  non-target topic branch, exposes base advancement (and fails on base
+  *divergence* — a rewritten target), warns when the base is unrecorded,
+  and exits specially on authority-carrying paths. `close` removes a
+  worktree only after proving — against a fresh fetch, failing closed if
+  the fetch fails — that there is no dirty, untracked, ignored-but-present
+  (without `--delete-ignored`), or remote-unreachable work; never with
+  `--force`. Verifying that the expected PR exists and landed is left to
+  the operator or the GitHub layer: `gh` is not reliably runnable in the
+  sandboxed sessions this repo measures, and a fresh-fetch reachability
+  proof plus the kept branch bounds the loss to zero commits.
 - **Thin harness adapters** register the same policy in both harnesses:
   `.claude/settings.json` and `.codex/hooks.json` run
   `scripts/agent-lifecycle.sh preflight --brief` on `SessionStart` (visible
   facts only — Claude documents SessionStart as context-adding, not
   blocking, so the hard gate lives at `PreToolUse`) and
-  `scripts/agent-lifecycle-guard.py` on `PreToolUse` (exit 2 blocks in both).
-  The guard denies only high-confidence violations — file edits and mutating
-  git commands in the primary checkout, force pushes, forced worktree
-  removal — and every denial states the fact, the rule, and the exact safe
-  next action. Configuration files stay separate per harness; the executable
-  policy is shared.
+  `scripts/agent-lifecycle-guard.py` on `PreToolUse` (exit 2 blocks in both;
+  the registrations fail closed when `python3` is missing rather than
+  silently disarming). The guard denies only high-confidence violations —
+  file edits, mutating git commands, and common shell writes (`rm`, `mv`,
+  `cp` destinations, `sed -i`, redirections) against the primary checkout,
+  including via `-C`, `--git-dir`, or a `cd` earlier in the command; force
+  pushes in any form (flags, `+`/`:` refspecs, `--delete`, `--mirror`);
+  forced worktree removal; and implicit-base `git worktree add` — and every
+  denial states the fact, the rule, and the exact safe next action.
+  Configuration files stay separate per harness; the executable policy is
+  shared. In both harnesses a repo's hooks become active only after the
+  owner has reviewed and trusted them in that harness (Claude: workspace
+  trust for project settings; Codex: the documented hook review-and-trust
+  step) — activation is a named checkpoint after landing, not something a
+  clone gets automatically.
 - **GitHub's `main-protections` ruleset** remains the landing authority (PR
   required, no force-push, no deletion, owner bound). Nothing client-side
   claims to replace it.
@@ -55,9 +73,16 @@ required for merge/auto-merge, force-push, rewriting published or shared
 history, default-branch pushes, tags, releases, deployment, protection
 bypasses, repository-setting changes, and unattended installs. A range that
 changes authority-carrying paths (`.claude/`, `.codex/`, `.github/`,
-`.claude-plugin/`, the lifecycle scripts) needs owner approval before its
-first push — such a change alters what a push *does*, which no content review
-proves safe.
+`.claude-plugin/`, the lifecycle scripts, and `CLAUDE.md`/`AGENTS.md` —
+the always-on policy text) needs owner approval before its first push —
+such a change alters what a push *does*, which no content review proves
+safe.
+
+**Production validation.** The unattended path — topic-branch push, draft
+PR, pause, approved merge, landed-state verification, cleanup — has **not
+yet run on a legitimate ordinary PR**. That live validation is the named
+pending checkpoint: the next ordinary reviewed change completes it, and
+until then the path is design-verified (tests and probes) only.
 
 **Base movement.** Rebase only an unpublished, privately owned branch. Once
 published or shared, merge the current remote base into it; published history
@@ -81,13 +106,26 @@ registrations share one guard with no translation layer. Known coverage gaps, re
 - Codex has no `WorktreeCreate`/`WorktreeRemove` equivalents. Codex-managed
   worktrees plus this lifecycle's `start`/`close` procedures are the fallback;
   no parity is claimed.
-- Codex hook commands here use repo-relative paths (Codex documents no
-  project-dir variable); a session started outside the repo root would not
-  find them. Claude registrations use `$CLAUDE_PROJECT_DIR`.
+- Codex documents no project-dir variable, so its hook commands resolve the
+  repo root themselves (`git rev-parse --show-toplevel`) before running the
+  shared scripts, per Codex's own hooks guidance; Claude registrations use
+  `$CLAUDE_PROJECT_DIR`.
 - Hooks see model tool calls, not native app/hosted operations, and the
   matchers do not cover MCP tools that can mutate GitHub state.
-- The guard deliberately does not parse raw shell writes (redirection,
-  `sed -i`) in the primary checkout, to keep false positives near zero.
+- The guard's documented fail-open cases (a miss allows; only a
+  high-confidence match blocks): unparseable stdin, an undetectable primary
+  root, unknown tool names, a payload without `cwd`, a `cd` target that
+  cannot be resolved statically (variables, substitutions), commands inside
+  command substitutions, unbalanced quotes, and file writes performed by
+  interpreters (`python -c`, `perl -e`) rather than the covered shell
+  writers.
+- The doc-writing flows (`research`, `domain-modeling`, and
+  `grill-with-docs`, which drives it) carry no per-skill lifecycle pointer:
+  in this repo the always-on invariant and the hooks already route them,
+  and in consumer repos their writes are notes and ADRs, not code — adding
+  the pointer to every such skill is the procedure-duplication outcome 11
+  of the contract forbids. Revisit if a doc-writing flow ever grows a
+  code-mutating step.
 
 All of this is mistake prevention for agents. Repo-owned, model-writable
 hooks are not an adversarial security boundary; the stronger boundary stays

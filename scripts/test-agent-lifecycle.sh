@@ -56,16 +56,49 @@ new_fixture() {
   git clone --quiet "$remote" "$primary"
 }
 
-# Push a new commit to the bare remote from a throwaway third clone, leaving the
+throwaway_clone() {
+  local clone
+  clone="$(mktemp -d "$fixture/clone.XXXXXX")"
+  git clone --quiet "$remote" "$clone"
+  echo "$clone"
+}
+
+# Push a new commit to the bare remote from a throwaway clone, leaving the
 # primary checkout's local main and origin/main stale. Echoes the new sha.
 advance_remote() {
-  local name="$1" clone
-  clone="$(mktemp -d "$fixture/advancer.XXXXXX")"
-  git clone --quiet "$remote" "$clone"
-  printf '%s\n' "advanced" >"$clone/$name"
+  local path="$1" clone
+  clone="$(throwaway_clone)"
+  mkdir -p "$(dirname "$clone/$path")"
+  printf '%s\n' "advanced" >"$clone/$path"
   git_t -C "$clone" add -A
-  git_t -C "$clone" commit --quiet -m "advance: $name"
+  git_t -C "$clone" commit --quiet -m "advance: $path"
   git_t -C "$clone" push --quiet origin main
+  git -C "$clone" rev-parse HEAD
+}
+
+# Create a second branch on the bare remote, one commit ahead of main and
+# carrying an authority-path file of its own. Echoes its tip sha.
+create_remote_branch() {
+  local name="$1" clone
+  clone="$(throwaway_clone)"
+  mkdir -p "$clone/.codex"
+  printf '%s\n' "{}" >"$clone/.codex/hooks.json"
+  printf '%s\n' "$name" >"$clone/$name.txt"
+  git_t -C "$clone" add -A
+  git_t -C "$clone" commit --quiet -m "open the $name branch"
+  git_t -C "$clone" push --quiet origin "HEAD:refs/heads/$name"
+  git -C "$clone" rev-parse HEAD
+}
+
+# Rewrite the remote's default branch so its previous tip is no longer an
+# ancestor of it. Echoes the new sha.
+rewrite_remote_default() {
+  local clone
+  clone="$(throwaway_clone)"
+  printf '%s\n' "rewritten" >>"$clone/README.md"
+  git_t -C "$clone" add -A
+  git_t -C "$clone" commit --quiet --amend -m "rewritten history"
+  git_t -C "$clone" push --quiet --force origin main
   git -C "$clone" rev-parse HEAD
 }
 
@@ -87,6 +120,14 @@ run_lifecycle() {
 
 assert_status() { # label, expected
   [ "$status" = "$2" ] || fail "$1: exit status $status, expected $2
+--- stdout ---
+$(cat "$fixture/out")
+--- stderr ---
+$(cat "$fixture/err")"
+}
+
+assert_nonzero() { # label
+  [ "$status" -ne 0 ] || fail "$1: exit status 0, expected nonzero
 --- stdout ---
 $(cat "$fixture/out")
 --- stderr ---
@@ -128,8 +169,19 @@ assert_no_branch() { # label, branch
   return 0
 }
 
-recorded_base_of() { # worktree path
+base_record_of() { # worktree
   cat "$(git -C "$1" rev-parse --absolute-git-dir)/agent-base"
+}
+
+# The record is "<sha> <remote-branch>"; an --offline-base record carries the
+# sha alone, so the expected branch field is then "".
+assert_base_record() { # label, worktree, expected sha, expected branch field
+  local record
+  record="$(base_record_of "$2")"
+  assert_equal "$1: agent-base sha field (record '$record')" \
+    "$(printf '%s' "$record" | awk '{print $1}')" "$3"
+  assert_equal "$1: agent-base branch field (record '$record')" \
+    "$(printf '%s' "$record" | awk '{print $2}')" "$4"
 }
 
 worktree_from_output() { # label
@@ -145,6 +197,16 @@ commit_in_worktree() { # worktree, path, message
   printf '%s\n' "content" >"$1/$2"
   git_t -C "$1" add -A
   git_t -C "$1" commit --quiet -m "$3"
+}
+
+# start + one ordinary commit, pushed: the state close's proofs are meant to
+# accept. Sets $wt.
+started_and_published() { # branch
+  run_lifecycle "$primary" start "$1"
+  assert_status "start $1" 0
+  wt="$(worktree_from_output "start $1")"
+  commit_in_worktree "$wt" "notes/$1.md" "published work"
+  git_t -C "$wt" push --quiet origin HEAD
 }
 
 # --- start --------------------------------------------------------------------
@@ -164,7 +226,7 @@ test_start_bases_on_fetched_remote_not_stale_local() {
   head="$(git -C "$wt" rev-parse HEAD)"
   assert_equal "worktree HEAD (must be the fetched remote tip, not local main $stale_local)" \
     "$head" "$advanced"
-  assert_equal "recorded base file" "$(recorded_base_of "$wt")" "$advanced"
+  assert_base_record "start with a stale local default branch" "$wt" "$advanced" "main"
 }
 
 test_start_fails_closed_when_fetch_fails() {
@@ -172,7 +234,7 @@ test_start_fails_closed_when_fetch_fails() {
   break_remote
 
   run_lifecycle "$primary" start topic
-  [ "$status" -ne 0 ] || assert_status "start with an unreachable remote" "nonzero"
+  assert_nonzero "start with an unreachable remote"
   assert_output_has "start with an unreachable remote" "fetch from 'origin' failed"
   assert_missing "start with an unreachable remote" "$fixture/primary-worktrees/topic"
   assert_no_branch "start with an unreachable remote" topic
@@ -192,7 +254,8 @@ test_start_offline_base_skips_the_fetch() {
 
   wt="$(worktree_from_output "start --offline-base")"
   assert_equal "worktree HEAD" "$(git -C "$wt" rev-parse HEAD)" "$base"
-  assert_equal "recorded base file" "$(recorded_base_of "$wt")" "$base"
+  # No fetch happened, so no remote branch is claimed: the sha stands alone.
+  assert_base_record "start --offline-base" "$wt" "$base" ""
 }
 
 test_start_refuses_an_existing_branch() {
@@ -200,12 +263,37 @@ test_start_refuses_an_existing_branch() {
   git -C "$primary" branch taken
 
   run_lifecycle "$primary" start taken
-  [ "$status" -ne 0 ] || assert_status "start on an existing branch name" "nonzero"
+  assert_nonzero "start on an existing branch name"
   # The script's own refusal, not git's incidental one: a name collision must be
   # answered with the next action, and before anything is created.
   assert_output_has "start on an existing branch name" \
     "choose a new name or enter its existing worktree"
   assert_missing "start on an existing branch name" "$fixture/primary-worktrees/taken"
+}
+
+test_start_base_ref_is_recorded_and_retargets_publish_check() {
+  new_fixture start-base-ref
+  local integration wt label
+  integration="$(create_remote_branch integration)"
+
+  run_lifecycle "$primary" start topic --base integration
+  assert_status "start --base integration" 0
+  wt="$(worktree_from_output "start --base integration")"
+  assert_equal "worktree HEAD" "$(git -C "$wt" rev-parse HEAD)" "$integration"
+  assert_base_record "start --base integration" "$wt" "$integration" "integration"
+
+  commit_in_worktree "$wt" "notes/ordinary.md" "an ordinary change"
+  label="publish-check in a --base integration worktree"
+  run_lifecycle "$wt" publish-check
+  # The integration branch carries a .codex/ file of its own. Measuring the
+  # range from origin/main instead would drag that authority path into it and
+  # exit 3, so a clean exit 0 is the proof that the recorded base ref is what
+  # publish-check targets.
+  assert_status "$label" 0
+  assert_output_has "$label" "outgoing commits (origin/integration..HEAD):"
+  assert_output_has "$label" "open a draft PR onto 'integration'"
+  assert_output_lacks "$label" "origin/main..HEAD"
+  assert_output_lacks "$label" "ATTENDED:"
 }
 
 # --- publish-check ------------------------------------------------------------
@@ -219,7 +307,7 @@ test_publish_check_rejects_a_dirty_tree() {
   printf '%s\n' "work in progress" >"$wt/dirty-file.txt"
 
   run_lifecycle "$wt" publish-check
-  [ "$status" -ne 0 ] || assert_status "publish-check on a dirty tree" "nonzero"
+  assert_nonzero "publish-check on a dirty tree"
   assert_output_has "publish-check on a dirty tree" "working tree not clean"
   assert_output_has "publish-check on a dirty tree" "dirty-file.txt"
 }
@@ -239,9 +327,45 @@ test_publish_check_stops_on_authority_paths() {
   assert_output_has "publish-check over a range touching .claude/" "Owner approval is required"
 }
 
+test_publish_check_authority_gate_survives_a_rename() {
+  new_fixture publish-authority-rename
+  local wt label
+  # The authority file has to exist in the base for a rename to be able to hide
+  # it: the range then deletes .claude/settings.json and adds the new path, and
+  # only a --no-renames diff still names the deleted side.
+  advance_remote ".claude/settings.json" >/dev/null
+  run_lifecycle "$primary" start topic
+  assert_status "start" 0
+  wt="$(worktree_from_output "start")"
+  mkdir -p "$wt/notes"
+  git -C "$wt" mv .claude/settings.json notes/settings.json
+  git_t -C "$wt" commit --quiet -m "move the settings out of .claude/"
+
+  label="publish-check over a git mv of an authority path"
+  run_lifecycle "$wt" publish-check
+  assert_status "$label" 3
+  assert_output_has "$label" "ATTENDED:"
+  assert_output_has "$label" ".claude/settings.json"
+}
+
+test_publish_check_authority_gate_covers_claude_md() {
+  new_fixture publish-authority-claude-md
+  local wt label
+  run_lifecycle "$primary" start topic
+  assert_status "start" 0
+  wt="$(worktree_from_output "start")"
+  commit_in_worktree "$wt" "CLAUDE.md" "edit the project instructions"
+
+  label="publish-check over a range touching only CLAUDE.md"
+  run_lifecycle "$wt" publish-check
+  assert_status "$label" 3
+  assert_output_has "$label" "ATTENDED:"
+  assert_output_has "$label" "CLAUDE.md"
+}
+
 test_publish_check_passes_a_clean_range_and_reports_advance() {
   new_fixture publish-clean
-  local wt label
+  local wt label advanced
   run_lifecycle "$primary" start topic
   assert_status "start" 0
   wt="$(worktree_from_output "start")"
@@ -258,13 +382,54 @@ test_publish_check_passes_a_clean_range_and_reports_advance() {
   assert_output_lacks "$label" "ADVANCED:"
 
   # Same branch, but the remote default branch has since moved past the base.
-  local advanced
   advanced="$(advance_remote later.txt)"
   label="publish-check after origin/main advanced past the base"
   run_lifecycle "$wt" publish-check
   assert_status "$label" 0
   assert_output_has "$label" "ADVANCED:"
   assert_output_has "$label" "$advanced"
+  assert_output_has "$label" "publishable."
+}
+
+test_publish_check_stops_when_the_target_history_diverged() {
+  new_fixture publish-diverged
+  local wt base rewritten label
+  advance_remote first.txt >/dev/null
+  run_lifecycle "$primary" start topic
+  assert_status "start" 0
+  wt="$(worktree_from_output "start")"
+  base="$(git -C "$wt" rev-parse HEAD)"
+  commit_in_worktree "$wt" "notes/ordinary.md" "an ordinary change"
+
+  rewritten="$(rewrite_remote_default)"
+  [ "$rewritten" != "$base" ] || fail "fixture did not rewrite the remote default branch"
+
+  # The base was not merely overtaken, it was orphaned: that is an owner
+  # decision, not an "ADVANCED" note the agent can reconcile on its own.
+  label="publish-check after the target branch history was rewritten"
+  run_lifecycle "$wt" publish-check
+  assert_nonzero "$label"
+  assert_output_has "$label" "DIVERGED:"
+  assert_output_has "$label" "$base"
+  assert_output_lacks "$label" "ADVANCED:"
+  assert_output_lacks "$label" "publishable."
+}
+
+test_publish_check_warns_on_an_unrecorded_base() {
+  new_fixture publish-unrecorded
+  local wt label
+  run_lifecycle "$primary" start topic
+  assert_status "start" 0
+  wt="$(worktree_from_output "start")"
+  commit_in_worktree "$wt" "notes/ordinary.md" "an ordinary change"
+  rm "$(git -C "$wt" rev-parse --absolute-git-dir)/agent-base"
+
+  # A missing record is a gap in provenance, not a publication failure: it must
+  # be said out loud, and it must not be the sole reason for a nonzero exit.
+  label="publish-check with no recorded base"
+  run_lifecycle "$wt" publish-check
+  assert_status "$label" 0
+  assert_output_has "$label" "no recorded base"
   assert_output_has "$label" "publishable."
 }
 
@@ -279,7 +444,7 @@ test_close_refuses_a_dirty_worktree() {
   printf '%s\n' "unsaved" >"$wt/dirty-file.txt"
 
   run_lifecycle "$primary" close "$wt"
-  [ "$status" -ne 0 ] || assert_status "close on a dirty worktree" "nonzero"
+  assert_nonzero "close on a dirty worktree"
   assert_output_has "close on a dirty worktree" "uncommitted or untracked work"
   assert_present "close on a dirty worktree" "$wt"
 }
@@ -293,19 +458,79 @@ test_close_refuses_an_unpushed_head() {
   commit_in_worktree "$wt" "notes/unpushed.md" "committed but never pushed"
 
   run_lifecycle "$primary" close "$wt"
-  [ "$status" -ne 0 ] || assert_status "close on an unpushed HEAD" "nonzero"
+  assert_nonzero "close on an unpushed HEAD"
   assert_output_has "close on an unpushed HEAD" "not reachable from any remote branch"
   assert_present "close on an unpushed HEAD" "$wt"
+}
+
+test_close_refuses_ignored_files_until_asked() {
+  new_fixture close-ignored
+  local wt label
+  started_and_published topic
+  printf '%s\n' "scratch/" >"$wt/.gitignore"
+  git_t -C "$wt" add -A
+  git_t -C "$wt" commit --quiet -m "ignore scratch/"
+  git_t -C "$wt" push --quiet origin HEAD
+  mkdir -p "$wt/scratch"
+  printf '%s\n' "local-only notes" >"$wt/scratch/notes.txt"
+
+  # Ignored files pass `git status --porcelain` but die with the worktree.
+  label="close on a worktree holding ignored files"
+  run_lifecycle "$primary" close "$wt"
+  assert_nonzero "$label"
+  assert_output_has "$label" "contains ignored files"
+  assert_output_has "$label" "--delete-ignored"
+  assert_output_has "$label" "scratch/"
+  assert_present "$label" "$wt"
+
+  label="close --delete-ignored"
+  run_lifecycle "$primary" close "$wt" --delete-ignored
+  assert_status "$label" 0
+  assert_output_has "$label" "removed: $wt"
+  assert_missing "$label" "$wt"
+}
+
+test_close_normalizes_the_worktree_path() {
+  new_fixture close-path-spelling
+  local wt alt label
+  started_and_published topic
+
+  # An unnormalized spelling of the same directory: the macOS $TMPDIR /tmp form
+  # of a /private/tmp worktree where the platform offers it, otherwise a
+  # portable `..` round trip.
+  alt="$wt/../$(basename "$wt")"
+  if [ "${wt#/private/}" != "$wt" ] && [ -d "/${wt#/private/}" ]; then
+    alt="/${wt#/private/}"
+  fi
+  [ "$alt" != "$wt" ] || fail "could not build an unnormalized spelling of '$wt'"
+
+  label="close on an unnormalized path spelling ($alt)"
+  run_lifecycle "$primary" close "$alt"
+  assert_status "$label" 0
+  assert_output_has "$label" "removed: $wt"
+  assert_missing "$label" "$wt"
+}
+
+test_close_fails_closed_when_the_remote_is_unreachable() {
+  new_fixture close-remote-down
+  local wt label
+  started_and_published topic
+  break_remote
+
+  # HEAD really is published, but that can no longer be proved; an unprovable
+  # cleanup must refuse rather than trust the stale remote-tracking cache.
+  label="close while the remote is unreachable"
+  run_lifecycle "$primary" close "$wt"
+  assert_nonzero "$label"
+  assert_output_has "$label" "fetch from 'origin' failed"
+  assert_output_has "$label" "refusing cleanup"
+  assert_present "$label" "$wt"
 }
 
 test_close_removes_a_pushed_worktree_and_keeps_the_branch() {
   new_fixture close-pushed
   local wt shim saved_path removal
-  run_lifecycle "$primary" start topic
-  assert_status "start" 0
-  wt="$(worktree_from_output "start")"
-  commit_in_worktree "$wt" "notes/pushed.md" "published work"
-  git_t -C "$wt" push --quiet origin HEAD
+  started_and_published topic
 
   # A trace shim ahead of git on PATH records what the script actually ran, so
   # "removed without --force" is proved by the invocation, not by its wording.
@@ -365,6 +590,10 @@ json_bash() { # command, cwd
   printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"cwd":"%s"}' "$1" "$2"
 }
 
+json_apply_patch() { # patch body (with \n escapes), cwd
+  printf '{"tool_name":"apply_patch","tool_input":{"patch":"%s"},"cwd":"%s"}' "$1" "$2"
+}
+
 guard_case() { # label, expected status, stdin payload
   local status=0
   printf '%s' "$3" >"$fixture/guard.in"
@@ -376,52 +605,187 @@ $3
 $(cat "$fixture/guard.err")"
 }
 
-test_guard_matrix() {
+# One fixture serves every guard group: a primary checkout holding the guard
+# (find_primary_root derives the answer from the script's own location) plus a
+# worktree to stand outside it.
+GUARD_FIXTURE_READY=0
+guard_fixture() {
+  if [ "$GUARD_FIXTURE_READY" = "1" ]; then
+    fixture="$TEST_ROOT/guard"
+    remote="$fixture/remote.git"
+    primary="$fixture/primary"
+    guard="$primary/scripts/agent-lifecycle-guard.py"
+    return 0
+  fi
   new_fixture guard
-  local wt
   run_lifecycle "$primary" start topic
-  assert_status "start" 0
-  wt="$(worktree_from_output "start")"
+  assert_status "start (guard fixture)" 0
+  guard_wt="$(worktree_from_output "start (guard fixture)")"
+  GUARD_FIXTURE_READY=1
+}
 
+test_guard_blocks_primary_checkout_mutation() {
+  guard_fixture
   guard_case "Edit inside the primary checkout" 2 \
     "$(json_file_tool Edit "$primary/README.md" "$primary")"
   guard_case "Edit inside a worktree" 0 \
-    "$(json_file_tool Edit "$wt/README.md" "$wt")"
+    "$(json_file_tool Edit "$guard_wt/README.md" "$guard_wt")"
   guard_case "git commit with cwd in the primary checkout" 2 \
     "$(json_bash "git commit -m wip" "$primary")"
   guard_case "git commit with cwd in a worktree" 0 \
-    "$(json_bash "git commit -m wip" "$wt")"
+    "$(json_bash "git commit -m wip" "$guard_wt")"
   guard_case "git -C <primary> commit from outside either checkout" 2 \
     "$(json_bash "git -C $primary commit -m wip" "$TEST_ROOT")"
+  guard_case "cd <primary> && git commit, from outside" 2 \
+    "$(json_bash "cd $primary && git commit -m wip" "$TEST_ROOT")"
+  guard_case "cd <primary>; git commit, from outside" 2 \
+    "$(json_bash "cd $primary; git commit -m wip" "$TEST_ROOT")"
+  guard_case "git -c <config> commit in the primary checkout" 2 \
+    "$(json_bash "git -c user.email=a@b commit -m wip" "$primary")"
+  guard_case "git --git-dir/--work-tree pointed at the primary checkout" 2 \
+    "$(json_bash "git --git-dir=$primary/.git --work-tree=$primary commit -m wip" "$TEST_ROOT")"
+}
+
+test_guard_allows_inspection_and_ignores_lookalikes() {
+  guard_fixture
   guard_case "git status in the primary checkout" 0 \
     "$(json_bash "git status --porcelain" "$primary")"
-  guard_case "git push --force from a worktree" 2 \
-    "$(json_bash "git push --force origin topic" "$wt")"
-  guard_case "plain git push from a worktree" 0 \
-    "$(json_bash "git push origin HEAD" "$wt")"
-  guard_case "git worktree remove --force" 2 \
-    "$(json_bash "git worktree remove --force $wt" "$TEST_ROOT")"
-  guard_case "a shell command that merely mentions git commit" 0 \
-    "$(json_bash "echo 'git commit'" "$primary")"
+  guard_case "git branch -a in the primary checkout" 0 \
+    "$(json_bash "git branch -a" "$primary")"
+  guard_case "git config --get in the primary checkout" 0 \
+    "$(json_bash "git config --get user.name" "$primary")"
+  guard_case "git reflog in the primary checkout" 0 \
+    "$(json_bash "git reflog" "$primary")"
+  guard_case "a double-quoted string that merely mentions git commit" 0 \
+    "$(json_bash "echo \\\"a && git commit\\\"" "$primary")"
+  guard_case "a single-quoted string that mentions a piped git commit" 0 \
+    "$(json_bash "echo 'harmless | git commit -m wip'" "$primary")"
   guard_case "unparseable stdin" 0 "not json at all"
+}
 
+test_guard_blocks_history_and_repo_surgery() {
+  guard_fixture
+  guard_case "git branch -D in the primary checkout" 2 \
+    "$(json_bash "git branch -D topic" "$primary")"
+  guard_case "git config <name> <value> in the primary checkout" 2 \
+    "$(json_bash "git config user.name x" "$primary")"
+  guard_case "git reflog expire in the primary checkout" 2 \
+    "$(json_bash "git reflog expire --expire=now --all" "$primary")"
+  guard_case "git gc in the primary checkout" 2 \
+    "$(json_bash "git gc --prune=now" "$primary")"
+}
+
+test_guard_push_matrix() {
+  guard_fixture
+  guard_case "git push --force" 2 \
+    "$(json_bash "git push --force origin topic" "$guard_wt")"
+  guard_case "git push with a bundled -f flag" 2 \
+    "$(json_bash "git push -qf origin main" "$guard_wt")"
+  guard_case "git push with a + force refspec" 2 \
+    "$(json_bash "git push origin +main:main" "$guard_wt")"
+  guard_case "git push with a deleting refspec" 2 \
+    "$(json_bash "git push origin :dead" "$guard_wt")"
+  guard_case "git push --delete" 2 \
+    "$(json_bash "git push origin --delete topic" "$guard_wt")"
+  guard_case "plain git push" 0 \
+    "$(json_bash "git push origin HEAD" "$guard_wt")"
+  guard_case "plain git push with an explicit refspec" 0 \
+    "$(json_bash "git push origin HEAD:refs/heads/x" "$guard_wt")"
+}
+
+test_guard_worktree_rules() {
+  guard_fixture
+  guard_case "git worktree remove --force" 2 \
+    "$(json_bash "git worktree remove --force $guard_wt" "$TEST_ROOT")"
+  guard_case "git worktree add without an explicit base" 2 \
+    "$(json_bash "git worktree add ../x" "$TEST_ROOT")"
+  guard_case "git worktree add with an explicit base" 0 \
+    "$(json_bash "git worktree add ../x origin/main" "$TEST_ROOT")"
+}
+
+test_guard_shell_writers() {
+  guard_fixture
+  guard_case "rm of a relative path in the primary checkout" 2 \
+    "$(json_bash "rm f.txt" "$primary")"
+  guard_case "rm of an unrelated absolute path from a primary cwd" 0 \
+    "$(json_bash "rm /tmp/unrelated-file" "$primary")"
+  guard_case "cp reading out of the primary checkout" 0 \
+    "$(json_bash "cp $primary/README.md /tmp/x" "$TEST_ROOT")"
+  guard_case "cp writing into the primary checkout" 2 \
+    "$(json_bash "cp /tmp/x $primary/README.md" "$TEST_ROOT")"
+  # The macOS spelling carries an empty argument; it must neither hide the
+  # path that follows it nor be mistaken for a path of its own.
+  guard_case "sed -i over a file in the primary checkout" 2 \
+    "$(json_bash "sed -i '' 's/a/b/' $primary/README.md" "$TEST_ROOT")"
+  guard_case "sed -i over an unrelated file from a primary cwd" 0 \
+    "$(json_bash "sed -i '' 's/a/b/' /tmp/unrelated-file" "$primary")"
+  guard_case "a redirection writing into the primary checkout" 2 \
+    "$(json_bash "echo x > $primary/f" "$TEST_ROOT")"
+  guard_case "a redirection writing elsewhere from a primary cwd" 0 \
+    "$(json_bash "echo x > /tmp/f" "$primary")"
+}
+
+test_guard_apply_patch() {
+  guard_fixture
+  guard_case "apply_patch naming a file in the primary checkout" 2 \
+    "$(json_apply_patch "*** Begin Patch\\n*** Update File: $primary/CLAUDE.md\\n@@\\n-a\\n+b\\n*** End Patch" "$TEST_ROOT")"
+  guard_case "apply_patch naming a relative file from a worktree cwd" 0 \
+    "$(json_apply_patch "*** Begin Patch\\n*** Update File: foo.md\\n@@\\n-a\\n+b\\n*** End Patch" "$guard_wt")"
+  guard_case "an unparseable apply_patch with a primary-checkout cwd" 2 \
+    "$(json_apply_patch "no headers here" "$primary")"
+}
+
+test_guard_escape_hatch_is_scoped_to_the_primary_rules() {
+  guard_fixture
   export AGENT_LIFECYCLE_ALLOW_PRIMARY=1
-  guard_case "an otherwise-blocked Edit under the owner escape hatch" 0 \
+  guard_case "escape hatch, Edit in the primary checkout" 0 \
     "$(json_file_tool Edit "$primary/README.md" "$primary")"
+  guard_case "escape hatch, git commit in the primary checkout" 0 \
+    "$(json_bash "git commit -m wip" "$primary")"
+  # The hatch lifts the primary-checkout rules only; rewriting published history
+  # or destroying unpushed work is not the owner's to wave through inline.
+  guard_case "escape hatch does not permit a force push" 2 \
+    "$(json_bash "git push --force origin main" "$guard_wt")"
+  guard_case "escape hatch does not permit a forced worktree removal" 2 \
+    "$(json_bash "git worktree remove -f $guard_wt" "$TEST_ROOT")"
   unset AGENT_LIFECYCLE_ALLOW_PRIMARY
+}
+
+test_guard_parses_a_quoted_path_with_spaces() {
+  new_fixture "guard spaces"
+  guard_case "git -C '<primary with spaces>' commit" 2 \
+    "$(json_bash "git -C '$primary' commit -m wip" "$TEST_ROOT")"
+  guard_case "git -C '<primary with spaces>' status" 0 \
+    "$(json_bash "git -C '$primary' status" "$TEST_ROOT")"
 }
 
 test_start_bases_on_fetched_remote_not_stale_local
 test_start_fails_closed_when_fetch_fails
 test_start_offline_base_skips_the_fetch
 test_start_refuses_an_existing_branch
+test_start_base_ref_is_recorded_and_retargets_publish_check
 test_publish_check_rejects_a_dirty_tree
 test_publish_check_stops_on_authority_paths
+test_publish_check_authority_gate_survives_a_rename
+test_publish_check_authority_gate_covers_claude_md
 test_publish_check_passes_a_clean_range_and_reports_advance
+test_publish_check_stops_when_the_target_history_diverged
+test_publish_check_warns_on_an_unrecorded_base
 test_close_refuses_a_dirty_worktree
 test_close_refuses_an_unpushed_head
+test_close_refuses_ignored_files_until_asked
+test_close_normalizes_the_worktree_path
+test_close_fails_closed_when_the_remote_is_unreachable
 test_close_removes_a_pushed_worktree_and_keeps_the_branch
 test_close_of_a_detached_worktree_reports_success
-test_guard_matrix
+test_guard_blocks_primary_checkout_mutation
+test_guard_allows_inspection_and_ignores_lookalikes
+test_guard_blocks_history_and_repo_surgery
+test_guard_push_matrix
+test_guard_worktree_rules
+test_guard_shell_writers
+test_guard_apply_patch
+test_guard_escape_hatch_is_scoped_to_the_primary_rules
+test_guard_parses_a_quoted_path_with_spaces
 
 echo "agent-lifecycle tests passed"
