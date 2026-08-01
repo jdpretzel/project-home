@@ -812,6 +812,18 @@ test_guard_blocks_history_and_repo_surgery() {
     "$(json_bash "git notes add -m x HEAD" "$primary")"
   guard_case "git notes list in the primary checkout" 0 \
     "$(json_bash "git notes list" "$primary")"
+  # bisect writes bisect refs/state and checks out commits; log reads.
+  guard_case "git bisect start in the primary checkout" 2 \
+    "$(json_bash "git bisect start" "$primary")"
+  guard_case "git bisect log in the primary checkout" 0 \
+    "$(json_bash "git bisect log" "$primary")"
+  # format-patch writes .patch files into its output directory.
+  guard_case "git format-patch writing into the primary checkout" 2 \
+    "$(json_bash "git format-patch HEAD~1" "$primary")"
+  guard_case "git format-patch --stdout in the primary checkout" 0 \
+    "$(json_bash "git format-patch --stdout HEAD~1" "$primary")"
+  guard_case "git format-patch -o elsewhere from the primary checkout" 0 \
+    "$(json_bash "git format-patch -o /tmp/patches HEAD~1" "$primary")"
 }
 
 test_guard_push_matrix() {
@@ -842,6 +854,17 @@ test_guard_push_matrix() {
     "$(json_bash "git push origin HEAD:refs/heads/main" "$guard_wt")"
   guard_case "git push -o value not mistaken for the remote positional" 0 \
     "$(json_bash "git push -o ci.skip origin HEAD:feature" "$guard_wt")"
+  # The publication contract: exactly one ordinary topic branch, no tags.
+  guard_case "git push --all" 2 \
+    "$(json_bash "git push --all origin" "$guard_wt")"
+  guard_case "git push --tags" 2 \
+    "$(json_bash "git push origin --tags" "$guard_wt")"
+  guard_case "git push --follow-tags" 2 \
+    "$(json_bash "git push --follow-tags origin HEAD" "$guard_wt")"
+  guard_case "git push with a refs/tags destination" 2 \
+    "$(json_bash "git push origin refs/tags/v1" "$guard_wt")"
+  guard_case "git push with two refspecs" 2 \
+    "$(json_bash "git push origin HEAD:alpha HEAD:beta" "$guard_wt")"
 }
 
 test_guard_fetch_rules() {
@@ -948,6 +971,16 @@ test_guard_shell_writers() {
     "$(json_bash "ln -s /tmp/target" "$primary")"
   guard_case "one-operand ln from outside the primary" 0 \
     "$(json_bash "ln -s /tmp/target" "$TEST_ROOT")"
+  # chmod dirties tracked executable bits; the first positional is the mode.
+  guard_case "chmod +x on a primary file" 2 \
+    "$(json_bash "chmod +x $primary/README.md" "$TEST_ROOT")"
+  guard_case "chmod on an outside path from a primary cwd" 0 \
+    "$(json_bash "chmod 755 /tmp/x" "$primary")"
+  # install -d: every operand is a directory to create.
+  guard_case "install -d creating a dir in the primary checkout" 2 \
+    "$(json_bash "install -d $primary/newdir /tmp/other" "$TEST_ROOT")"
+  guard_case "install -d entirely outside from a primary cwd" 0 \
+    "$(json_bash "install -d /tmp/a /tmp/b" "$primary")"
 }
 
 test_guard_apply_patch() {

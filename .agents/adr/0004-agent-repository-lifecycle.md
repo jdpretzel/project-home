@@ -66,25 +66,30 @@ One lifecycle, three layers, one owner per fact:
   the registrations fail closed when `python3` is missing rather than
   silently disarming). The guard denies only high-confidence violations —
   file edits, mutating git commands, and common shell writes (`rm`, `mv`,
-  `cp` destinations — including `-t` target-directory form — one-operand
-  `ln` into the cwd, every `sed` in-place spelling (`-i`, `--in-place`,
-  combined `-Ei`), redirections including `&>` and `>|`) against the
+  `cp` destinations — including `-t` target-directory form and
+  `install -d`'s all-directory operands — one-operand `ln` into the cwd,
+  `chmod` against checkout files, every `sed` in-place spelling (`-i`,
+  `--in-place`, combined `-Ei`), redirections including `&>` and `>|`) against the
   primary checkout, including via `-C`, `--git-dir`, a
   `GIT_DIR`/`GIT_WORK_TREE` environment prefix, or a `cd` earlier in the
   command (a `cd` whose target
   cannot exist keeps the prior directory, since the shell does too —
   pinned in `test_guard_shell_writers`);
   force pushes in any form (flags, `+`/`:` refspecs, `--delete`,
-  `--mirror`) and ordinary refspecs whose destination is the remote
-  default branch (`git push origin HEAD:main` — pinned in
-  `test_guard_push_matrix`); every `git worktree remove` (only `close`
+  `--mirror`), ordinary refspecs whose destination is the remote
+  default branch (`git push origin HEAD:main`), and pushes beyond the
+  one-topic-branch contract — `--all`/`--branches`, `--tags`/
+  `--follow-tags`, `refs/tags/` destinations, or multiple refspecs in
+  one push (all pinned in `test_guard_push_matrix`); every `git worktree remove` (only `close`
   runs the loss proofs, and even unforced removal deletes ignored files);
   shared-state mutation from linked worktrees, which share the primary's
   config and refs — `config` writes (except `--worktree` scope), `remote`
   rewrites, and `fetch` forms that write outside `refs/remotes/`
   (plain and `--prune` fetches stay allowed everywhere as evidence
   hygiene; pinned in `test_guard_fetch_rules` and
-  `test_guard_shared_state_from_worktrees`); and implicit-base
+  `test_guard_shared_state_from_worktrees`); `bisect` state changes and
+  `format-patch` writing its patch files into the primary (`--stdout`
+  and outside `-o` stay allowed); and implicit-base
   `git worktree add` — and every denial states the fact, the rule, and
   the exact safe next action.
   Configuration files stay separate per harness; the executable policy is

@@ -65,6 +65,9 @@ CONDITIONAL_GIT = {
     "symbolic-ref": None,  # special-cased: bare read allows
     # `git notes` writes refs/notes/*; list/show forms read.
     "notes": {"add", "append", "copy", "edit", "merge", "remove", "prune"},
+    # bisect writes bisect refs/state and checks out candidate commits;
+    # its log/terms/visualize forms read.
+    "bisect": None,  # special-cased below
     # Plain `fetch` (with or without --prune) converges local remote-tracking
     # refs toward the remote's authoritative state — the lifecycle itself
     # prescribes pruned fetches as evidence hygiene, so it stays allowed
@@ -101,6 +104,7 @@ WRITER_VALUE_OPTS = {
     "ln": {"-S", "--suffix"},
     "install": {"-m", "--mode", "-o", "--owner", "-g", "--group",
                 "-S", "--suffix", "--strip-program"},
+    "chmod": {"--reference"},
 }
 
 GIT_VALUE_FLAGS = {"-C", "-c", "--config-env", "--namespace", "--exec-path"}
@@ -358,29 +362,55 @@ def check_push(seg_text, rest, primary):
             "deleting remote refs — including via `--prune`, which removes every remote ref absent locally — is an owner action",
             "leave remote refs in place; ask the owner to delete branches",
         )
-    # An ordinary refspec can still land on the remote's default branch
-    # (`git push origin HEAD:main`, `git push origin main`). The destination
-    # is the part after `:`, or the whole refspec when there is none; an
-    # unknowable default branch or a bare/`HEAD` destination fails open.
+    # The publication contract is exactly one ordinary topic branch per
+    # push: branch-sweeping and tag-publishing forms are owner actions.
+    if any(t in ("--all", "--branches", "--tags", "--follow-tags")
+           for t in rest):
+        deny(
+            f"a branch-sweeping or tag-publishing push: `{seg_text}`",
+            "publication is exactly one ordinary topic branch per push; pushing all branches or any tags is an owner action",
+            "push the one topic branch (`git push origin HEAD`); ask the owner about tags or bulk publication",
+        )
     positionals = push_positionals(rest)
+    if len(positionals) > 2:
+        deny(
+            f"multiple refspecs in one push: `{seg_text}`",
+            "publication is exactly one ordinary topic branch per push",
+            "push one refspec at a time; ask the owner if several branches genuinely need publishing",
+        )
+    # An ordinary refspec can still land on the remote's default branch
+    # (`git push origin HEAD:main`, `git push origin main`) or publish a
+    # tag (`refs/tags/...` destination). The destination is the part after
+    # `:`, or the whole refspec when there is none; an unknowable default
+    # branch or a bare/`HEAD` destination fails open.
     if positionals:
         default = remote_default_branch(primary, positionals[0])
-        if default:
-            for spec in positionals[1:]:
-                dest = spec.split(":", 1)[1] if ":" in spec else spec
-                if dest.startswith("refs/heads/"):
-                    dest = dest[len("refs/heads/"):]
-                if dest == default:
-                    deny(
-                        f"a push targeting the remote default branch '{default}': `{seg_text}`",
-                        "default-branch pushes are the owner's; agent work lands by PR",
-                        "push a topic branch (`git push origin HEAD`) and open a draft PR",
-                    )
+        for spec in positionals[1:]:
+            dest = spec.split(":", 1)[1] if ":" in spec else spec
+            if dest.startswith("refs/tags/"):
+                deny(
+                    f"a push publishing a tag: `{seg_text}`",
+                    "tag publication is an owner action",
+                    "push the topic branch only; ask the owner to create or push tags",
+                )
+            if dest.startswith("refs/heads/"):
+                dest = dest[len("refs/heads/"):]
+            if default and dest == default:
+                deny(
+                    f"a push targeting the remote default branch '{default}': `{seg_text}`",
+                    "default-branch pushes are the owner's; agent work lands by PR",
+                    "push a topic branch (`git push origin HEAD`) and open a draft PR",
+                )
 
 
 def conditional_mutates(sub, rest):
     if sub == "config":
         return not any(t in CONFIG_READ_FLAGS for t in rest)
+    if sub == "bisect":
+        positional = [t for t in rest if not t.startswith("-")]
+        if not positional:
+            return False
+        return positional[0] not in ("log", "terms", "visualize", "view")
     if sub == "fetch":
         # Only forms that write outside refs/remotes/ mutate: a refspec with
         # a destination elsewhere (updates local branches), --refmap (rewrites
@@ -472,9 +502,23 @@ def check_plain_writers(seg, seg_text, effective, primary):
     if head in SHELL_WRITERS_ALL_ARGS:
         positionals, _ = writer_args(head, seg[1:])
         hit = path_args_hit_primary(positionals, effective, primary)
+    elif head == "chmod":
+        positionals, _ = writer_args(head, seg[1:])
+        # The first positional is the mode (`u+x`, `755`) unless --reference
+        # supplies it; the rest are the files whose metadata changes — a
+        # tracked executable bit flip dirties the checkout.
+        has_ref = any(t == "--reference" or t.startswith("--reference=")
+                      for t in seg[1:])
+        hit = path_args_hit_primary(
+            positionals if has_ref else positionals[1:], effective, primary)
     elif head in SHELL_WRITERS_DEST_ONLY:
         positionals, target_dir = writer_args(head, seg[1:])
-        if target_dir is not None:
+        if head == "install" and any(t in ("-d", "--directory")
+                                     for t in seg[1:]):
+            # `install -d DIRECTORY...`: every operand is a directory to
+            # create, not sources plus one destination.
+            dests = positionals
+        elif target_dir is not None:
             dests = [target_dir]
         elif head == "ln" and len(positionals) == 1:
             # One-operand `ln -s /tmp/target` creates basename(target) in
@@ -607,6 +651,23 @@ def check_bash(command, cwd, primary):
             if resolved is not None:
                 targets.append(resolved)
         targets.extend(env_dirs)
+
+        # format-patch writes .patch files into its output directory — the
+        # effective directory unless --stdout or -o/--output-directory says
+        # otherwise.
+        if sub == "format-patch" and "--stdout" not in rest:
+            out = None
+            for i, t in enumerate(rest):
+                if t in ("-o", "--output-directory") and i + 1 < len(rest):
+                    out = rest[i + 1]
+                elif t.startswith("--output-directory="):
+                    out = t.split("=", 1)[1]
+                elif t.startswith("-o") and len(t) > 2 and not t.startswith("--"):
+                    out = t[2:]
+            base = targets[0] if targets else None
+            dest = resolve_dir(base, out) if out is not None else base
+            if dest is not None and inside(dest, primary):
+                deny_primary(f"`git format-patch` writing patch files into the primary checkout at {primary}")
 
         hits_primary = any(inside(t, primary) for t in targets)
         if hits_primary:
