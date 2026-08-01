@@ -504,7 +504,7 @@ test_close_refuses_an_unpushed_head() {
 
   run_lifecycle "$primary" close "$wt"
   assert_nonzero "close on an unpushed HEAD"
-  assert_output_has "close on an unpushed HEAD" "not reachable from any remote branch"
+  assert_output_has "close on an unpushed HEAD" "not reachable from any origin branch"
   assert_present "close on an unpushed HEAD" "$wt"
 }
 
@@ -622,8 +622,27 @@ test_close_refuses_after_the_remote_branch_was_deleted() {
   run_lifecycle "$primary" close "$wt"
   assert_nonzero "close after the remote deleted the branch"
   assert_output_has "close after the remote deleted the branch" \
-    "not reachable from any remote branch"
+    "not reachable from any origin branch"
   [ -d "$wt" ] || fail "close after the remote deleted the branch: worktree was removed"
+}
+
+test_close_ignores_other_remotes_tracking_refs() {
+  new_fixture close-other-remote
+  local wt
+  run_lifecycle "$primary" start topic
+  assert_status "start" 0
+  wt="$(worktree_from_output "start")"
+  commit_in_worktree "$wt" "notes/topic.md" "unpublished work"
+  # A second remote holds HEAD, but the close proof fetched and pruned only
+  # origin — backup's tracking ref must not vouch for the work.
+  git init --quiet --bare "$fixture/backup.git"
+  git -C "$wt" remote add backup "$fixture/backup.git"
+  git_t -C "$wt" push --quiet backup HEAD
+
+  run_lifecycle "$primary" close "$wt"
+  assert_nonzero "close with HEAD only on a foreign remote"
+  assert_output_has "close with HEAD only on a foreign remote" "not reachable from any origin branch"
+  [ -d "$wt" ] || fail "close with HEAD only on a foreign remote: worktree was removed"
 }
 
 test_close_of_a_detached_worktree_reports_success() {
@@ -657,6 +676,13 @@ test_start_refuses_a_dir_inside_the_primary_checkout() {
   run_lifecycle "$primary" start topic --dir nested
   assert_nonzero "start --dir with a relative path inside the primary"
   assert_no_branch "start --dir with a relative path inside the primary" topic
+
+  # A nonexistent component followed by `..` re-enters real directories;
+  # the containment check must survive the lexical detour.
+  run_lifecycle "$primary" start topic --dir "$fixture/ghost/../primary/nested"
+  assert_nonzero "start --dir dodging containment via dot segments"
+  assert_no_branch "start --dir dodging containment via dot segments" topic
+  [ ! -e "$primary/nested" ] || fail "start --dir dodging containment via dot segments: nested dir was created"
 }
 
 test_close_proof_survives_hidden_untracked_config() {
@@ -832,6 +858,13 @@ test_guard_blocks_history_and_repo_surgery() {
     "$(json_bash "git submodule init" "$primary")"
   guard_case "git submodule status in the primary checkout" 0 \
     "$(json_bash "git submodule status" "$primary")"
+  # clone materializes an untracked repository at its destination.
+  guard_case "git clone into the primary checkout" 2 \
+    "$(json_bash "git clone /tmp/source nested" "$primary")"
+  guard_case "git clone with a derived dir in the primary checkout" 2 \
+    "$(json_bash "git clone /tmp/source.git" "$primary")"
+  guard_case "git clone reading the primary to elsewhere" 0 \
+    "$(json_bash "git clone $primary /tmp/clone-dest" "$TEST_ROOT")"
 }
 
 test_guard_push_matrix() {
@@ -880,6 +913,13 @@ test_guard_push_matrix() {
     "$(json_bash "git push --repo origin HEAD:alpha HEAD:beta" "$guard_wt")"
   guard_case "git push --repo with one topic refspec" 0 \
     "$(json_bash "git push --repo=origin HEAD:feature" "$guard_wt")"
+  # An unqualified name that is a local tag publishes that tag: rev-parse
+  # tries refs/tags/ before refs/heads/.
+  git -C "$primary" tag guardtag
+  guard_case "git push with an unqualified tag refspec" 2 \
+    "$(json_bash "git push origin guardtag" "$guard_wt")"
+  guard_case "git push with an unqualified non-tag refspec" 0 \
+    "$(json_bash "git push origin sometopic" "$guard_wt")"
 }
 
 test_guard_fetch_rules() {
@@ -1010,6 +1050,8 @@ test_guard_shell_writers() {
     "$(json_bash "nohup git commit -m wip" "$primary")"
   guard_case "command -v is describe-only" 0 \
     "$(json_bash "command -v git" "$primary")"
+  guard_case "command -- terminator before the real command" 2 \
+    "$(json_bash "command -- rm f.txt" "$primary")"
 }
 
 test_guard_apply_patch() {
@@ -1071,6 +1113,7 @@ test_close_normalizes_the_worktree_path
 test_close_fails_closed_when_the_remote_is_unreachable
 test_close_removes_a_pushed_worktree_and_keeps_the_branch
 test_close_refuses_after_the_remote_branch_was_deleted
+test_close_ignores_other_remotes_tracking_refs
 test_close_of_a_detached_worktree_reports_success
 test_guard_blocks_primary_checkout_mutation
 test_guard_allows_inspection_and_ignores_lookalikes

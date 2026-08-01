@@ -132,6 +132,8 @@ def peel_runners(seg):
                 return []  # describe-only: nothing executes
             while rest and rest[0] == "-p":
                 rest = rest[1:]
+            if rest and rest[0] == "--":
+                rest = rest[1:]
         elif head == "exec":
             while rest and rest[0].startswith("-"):
                 if rest[0] == "-a" and len(rest) > 1:
@@ -385,6 +387,24 @@ def push_remote_and_refspecs(rest):
     return repo, out
 
 
+def local_tag_exists(primary, name):
+    """True when refs/tags/<name> exists in the primary repo (worktrees share
+    tag refs) — loose file or packed-refs; reftable storage fails open."""
+    if not name or name.startswith("refs/") or "/" in name:
+        return False
+    if os.path.isfile(os.path.join(primary, ".git", "refs", "tags", name)):
+        return True
+    try:
+        with open(os.path.join(primary, ".git", "packed-refs"),
+                  encoding="utf-8") as f:
+            for line in f:
+                if line.strip().endswith(f" refs/tags/{name}"):
+                    return True
+    except OSError:
+        pass
+    return False
+
+
 def check_push(seg_text, rest, primary):
     if any(t == "--force" or t.startswith("--force-with-lease")
            or t.startswith("--force-if-includes") for t in rest) \
@@ -432,7 +452,10 @@ def check_push(seg_text, rest, primary):
         default = remote_default_branch(primary, remote)
         for spec in refspecs:
             dest = spec.split(":", 1)[1] if ":" in spec else spec
-            if dest.startswith("refs/tags/"):
+            # An unqualified name that resolves to a local tag publishes
+            # that tag: rev-parse tries refs/tags/<name> before
+            # refs/heads/<name>, so an existing tag wins the refspec.
+            if dest.startswith("refs/tags/") or local_tag_exists(primary, dest):
                 deny(
                     f"a push publishing a tag: `{seg_text}`",
                     "tag publication is an owner action",
@@ -703,6 +726,37 @@ def check_bash(command, cwd, primary):
             if resolved is not None:
                 targets.append(resolved)
         targets.extend(env_dirs)
+
+        # clone materializes an untracked repository at its destination —
+        # the second positional, or a directory derived from the source name.
+        if sub == "clone":
+            value_flags = {"-b", "--branch", "--depth", "-o", "--origin",
+                           "-u", "--upload-pack", "--reference",
+                           "--reference-if-able", "--separate-git-dir",
+                           "--template", "-c", "--config", "-j", "--jobs",
+                           "--filter", "--shallow-since", "--shallow-exclude",
+                           "--server-option", "--bundle-uri"}
+            pos, i = [], 0
+            while i < len(rest):
+                t = rest[i]
+                if t in value_flags and i + 1 < len(rest):
+                    i += 2
+                    continue
+                if t.startswith("-"):
+                    i += 1
+                    continue
+                pos.append(t)
+                i += 1
+            dest = None
+            if len(pos) >= 2:
+                dest = pos[1]
+            elif pos:
+                name = os.path.basename(pos[0].rstrip("/"))
+                dest = name[:-4] if name.endswith(".git") else name
+            base = targets[0] if targets else None
+            resolved = resolve_dir(base, dest) if dest else None
+            if resolved is not None and inside(resolved, primary):
+                deny_primary(f"`git clone` creating {resolved}, inside the primary checkout at {primary}")
 
         # format-patch writes .patch files into its output directory — the
         # effective directory unless --stdout or -o/--output-directory says

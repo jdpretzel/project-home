@@ -46,8 +46,11 @@ One lifecycle, three layers, one owner per fact:
   and exits specially on authority-carrying paths. `close` removes a
   worktree only after proving — against a fresh *pruned* fetch (a
   remote-tracking ref the remote no longer advertises is stale evidence,
-  so a deleted or force-moved remote branch cannot vouch for HEAD;
-  pinned by `test_close_refuses_after_the_remote_branch_was_deleted`),
+  so a deleted or force-moved remote branch cannot vouch for HEAD, and
+  restricted to that remote's refs — another remote's stale tracking ref
+  cannot vouch either (pinned by
+  `test_close_refuses_after_the_remote_branch_was_deleted` and
+  `test_close_ignores_other_remotes_tracking_refs`)),
   failing closed if the fetch fails — that there is no dirty, untracked,
   ignored-but-present (without `--delete-ignored`), or remote-unreachable
   work; never with `--force`. Every proof-bearing status forces
@@ -80,7 +83,8 @@ One lifecycle, three layers, one owner per fact:
   `--mirror`), ordinary refspecs whose destination is the remote
   default branch (`git push origin HEAD:main`), and pushes beyond the
   one-topic-branch contract — `--all`/`--branches`, `--tags`/
-  `--follow-tags`, `refs/tags/` destinations, or multiple refspecs in
+  `--follow-tags`, tag destinations (spelled `refs/tags/` or an
+  unqualified name resolving to a local tag), or multiple refspecs in
   one push (all pinned in `test_guard_push_matrix`); every `git worktree remove` (only `close`
   runs the loss proofs, and even unforced removal deletes ignored files);
   shared-state mutation from linked worktrees, which share the primary's
@@ -88,9 +92,10 @@ One lifecycle, three layers, one owner per fact:
   rewrites, and `fetch` forms that write outside `refs/remotes/`
   (plain and `--prune` fetches stay allowed everywhere as evidence
   hygiene; pinned in `test_guard_fetch_rules` and
-  `test_guard_shared_state_from_worktrees`); `bisect` state changes and
+  `test_guard_shared_state_from_worktrees`); `bisect` state changes,
   `format-patch` writing its patch files into the primary (`--stdout`
-  and outside `-o` stay allowed); and implicit-base
+  and outside `-o` stay allowed), and `clone` destinations landing in
+  the primary; and implicit-base
   `git worktree add` — and every denial states the fact, the rule, and
   the exact safe next action.
   Configuration files stay separate per harness; the executable policy is

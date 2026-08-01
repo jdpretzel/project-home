@@ -217,6 +217,20 @@ or name the base explicitly with --base <remote-branch>."
     walk="$(dirname "$walk")"
   done
   walk="$(cd "$walk" && pwd -P)$suffix"
+  # The unresolved suffix may still carry `.`/`..` segments (a nonexistent
+  # component followed by `..` re-enters real directories); collapse them
+  # lexically — sound here because the prefix is already physical.
+  local out="" seg_rest="$walk/"
+  while [ -n "$seg_rest" ]; do
+    seg="${seg_rest%%/*}"
+    seg_rest="${seg_rest#*/}"
+    case "$seg" in
+      ''|'.') ;;
+      '..') out="${out%/*}" ;;
+      *) out="$out/$seg" ;;
+    esac
+  done
+  walk="${out:-/}"
   case "$walk/" in
     "$(primary_root)"/*) fail "worktree path '$dir' is inside the primary checkout; place worktrees outside it (default: a sibling <name>-worktrees directory)" ;;
   esac
@@ -392,8 +406,10 @@ Move them out first, or re-run with --delete-ignored to accept their deletion"
   out="$(git -C "$wt" fetch --prune "$REMOTE" 2>&1)" || status=$?
   [ "$status" -eq 0 ] || { printf '%s\n' "$out" >&2; \
     fail "fetch from '$REMOTE' failed; cannot prove HEAD is published, refusing cleanup"; }
-  if [ -z "$(git -C "$wt" branch -r --contains HEAD)" ]; then
-    fail "HEAD of '$wt' is not reachable from any remote branch (checked after a fresh fetch); push it (or confirm it landed) before cleanup"
+  # Restrict to the remote the proof just fetched and pruned: another
+  # remote's stale tracking ref must not vouch for HEAD.
+  if [ -z "$(git -C "$wt" branch -r --contains HEAD --list "$REMOTE/*")" ]; then
+    fail "HEAD of '$wt' is not reachable from any $REMOTE branch (checked after a fresh fetch); push it (or confirm it landed) before cleanup"
   fi
 }
 
