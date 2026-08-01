@@ -27,17 +27,23 @@ One lifecycle, three layers, one owner per fact:
   work; `--offline-base <sha>` is the owner's explicit decision, never an
   agent's fallback), refreshes `origin/HEAD` so a renamed default branch
   cannot mislead, resolves the remote default branch (or `--base`) to an
-  exact commit, creates an isolated worktree there, and records the base
+  exact commit, refuses a topic name that already exists locally *or* on
+  the remote (publishing would append to someone's published branch;
+  pinned by `test_start_refuses_a_branch_already_on_the_remote`),
+  creates an isolated worktree there, and records the base
   object ID *and* base ref in the worktree's gitdir — `publish-check` later
   targets that ref, so integration-branch work is not misdirected at the
   default branch. `publish-check` re-fetches, requires a clean tree and a
   non-target topic branch, exposes base advancement (and fails on base
   *divergence* — a rewritten target), warns when the base is unrecorded,
   and exits specially on authority-carrying paths. `close` removes a
-  worktree only after proving — against a fresh fetch, failing closed if
-  the fetch fails — that there is no dirty, untracked, ignored-but-present
-  (without `--delete-ignored`), or remote-unreachable work; never with
-  `--force`. Verifying that the expected PR exists and landed is left to
+  worktree only after proving — against a fresh *pruned* fetch (a
+  remote-tracking ref the remote no longer advertises is stale evidence,
+  so a deleted or force-moved remote branch cannot vouch for HEAD;
+  pinned by `test_close_refuses_after_the_remote_branch_was_deleted`),
+  failing closed if the fetch fails — that there is no dirty, untracked,
+  ignored-but-present (without `--delete-ignored`), or remote-unreachable
+  work; never with `--force`. Verifying that the expected PR exists and landed is left to
   the operator or the GitHub layer: `gh` is not reliably runnable in the
   sandboxed sessions this repo measures, and a fresh-fetch reachability
   proof plus the kept branch bounds the loss to zero commits.

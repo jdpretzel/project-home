@@ -82,7 +82,9 @@ fetch_or_fail() {
   # The credential helper may print "failed to store" noise on public
   # remotes; only the fetch's own exit status decides success.
   local out status=0
-  out="$(git fetch "$REMOTE" 2>&1)" || status=$?
+  # --prune: a remote-tracking ref the remote no longer advertises is stale
+  # evidence — it must not resolve a base or vouch for reachability.
+  out="$(git fetch --prune "$REMOTE" 2>&1)" || status=$?
   if [ -n "$out" ]; then
     printf '%s\n' "$out" | grep -v '^failed to store' >&2 || true
   fi
@@ -159,6 +161,10 @@ cmd_start() {
     base_sha="$(git rev-parse --verify --quiet "$offline_base^{commit}")" || \
       fail "offline base '$offline_base' does not resolve to a commit"
     base_desc="explicit offline base (no fetch — the owner's choice, not a default)"
+    # An owner who also names --base still means that branch as the
+    # publication target; dropping it would point publish-check at the
+    # default branch.
+    record_ref="$base_ref"
   else
     fetch_or_fail
     # Fetch does not refresh the cached notion of the remote's default
@@ -171,6 +177,13 @@ cmd_start() {
     base_desc="$REMOTE/$ref, fetched in this start operation"
     record_ref="$ref"
   fi
+
+  # A remote branch of the same name means the later `git push origin HEAD`
+  # would append this task to someone's published branch — or fail only
+  # after the work is done. (In --offline-base mode this checks the cached
+  # remote-tracking refs, the best evidence available without a fetch.)
+  git rev-parse --verify --quiet "refs/remotes/$REMOTE/$branch" >/dev/null && \
+    fail "'$REMOTE/$branch' already exists; choose a new branch name, or ask the owner about the published one"
 
   if [ -z "$dir" ]; then
     local primary parent name
@@ -338,9 +351,10 @@ run_close_proofs() {
 Move them out first, or re-run with --delete-ignored to accept their deletion"
   fi
   # Judge reachability against freshly fetched remote refs, not a stale
-  # remote-tracking cache; an unreachable remote fails closed.
+  # remote-tracking cache; --prune so a branch the remote has deleted or
+  # force-moved cannot vouch for HEAD. An unreachable remote fails closed.
   local out status=0
-  out="$(git -C "$wt" fetch "$REMOTE" 2>&1)" || status=$?
+  out="$(git -C "$wt" fetch --prune "$REMOTE" 2>&1)" || status=$?
   [ "$status" -eq 0 ] || { printf '%s\n' "$out" >&2; \
     fail "fetch from '$REMOTE' failed; cannot prove HEAD is published, refusing cleanup"; }
   if [ -z "$(git -C "$wt" branch -r --contains HEAD)" ]; then

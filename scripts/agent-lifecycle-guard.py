@@ -36,10 +36,10 @@ FILE_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 
 # Deny these outright when they run against the primary checkout.
 MUTATING_GIT = {
-    "commit", "merge", "rebase", "cherry-pick", "revert", "am", "apply",
-    "reset", "restore", "switch", "checkout", "stash", "clean", "mv", "rm",
-    "pull", "gc", "repack", "update-ref", "replace", "filter-branch",
-    "prune",
+    "add", "commit", "merge", "rebase", "cherry-pick", "revert", "am",
+    "apply", "reset", "restore", "switch", "checkout", "stash", "clean",
+    "mv", "rm", "pull", "gc", "repack", "update-ref", "replace",
+    "filter-branch", "prune",
 }
 
 # Deny these in the primary checkout only with the listed mutating
@@ -64,10 +64,12 @@ CONFIG_READ_FLAGS = {"--get", "--get-all", "--get-regexp", "--get-urlmatch",
 # (resolved against the effective directory) lands inside the primary
 # checkout. For copy-like commands only the destination (last positional)
 # is written — sources are reads, so `cp <primary>/f /tmp/x` stays
-# allowed. `rm /tmp/x` from a primary cwd also stays allowed: arguments
-# that don't resolve into the primary checkout never match.
-SHELL_WRITERS_ALL_ARGS = {"rm", "rmdir", "touch", "mkdir", "truncate", "tee"}
-SHELL_WRITERS_DEST_ONLY = {"mv", "cp", "ln", "install"}
+# allowed. `mv` is not copy-like: it deletes its source, so every
+# argument counts. `rm /tmp/x` from a primary cwd also stays allowed:
+# arguments that don't resolve into the primary checkout never match.
+SHELL_WRITERS_ALL_ARGS = {"rm", "rmdir", "touch", "mkdir", "truncate", "tee",
+                          "mv"}
+SHELL_WRITERS_DEST_ONLY = {"cp", "ln", "install"}
 
 GIT_VALUE_FLAGS = {"-C", "-c", "--config-env", "--namespace", "--exec-path"}
 
@@ -241,11 +243,11 @@ def check_push(seg_text, rest):
             "`+refspec` force-updates and `:refspec` deletes remote refs; both are owner actions",
             "push a plain refspec (`git push origin HEAD`); ask the owner for rewrites or deletions",
         )
-    if any(t in ("--delete", "--mirror") for t in rest) or is_short_flag_with(
+    if any(t in ("--delete", "--mirror", "--prune") for t in rest) or is_short_flag_with(
             [t for t in rest if re.fullmatch(r"-[a-zA-Z]+", t)], "d"):
         deny(
-            f"a remote-deleting or mirror push: `{seg_text}`",
-            "remote branch deletion and mirror pushes are owner actions",
+            f"a remote-deleting, pruning, or mirror push: `{seg_text}`",
+            "deleting remote refs — including via `--prune`, which removes every remote ref absent locally — is an owner action",
             "leave remote refs in place; ask the owner to delete branches",
         )
 
@@ -257,6 +259,26 @@ def conditional_mutates(sub, rest):
         # bare `symbolic-ref NAME` reads; a second non-flag arg writes
         positional = [t for t in rest if not t.startswith("-")]
         return len(positional) >= 2 or "--delete" in rest or "-d" in rest
+    if sub in ("branch", "tag"):
+        flagged = CONDITIONAL_GIT[sub]
+        if any(t in flagged or t in ("-f", "--force")
+               or t.startswith("--set-upstream-to=") for t in rest):
+            return True
+        # A positional argument without a listing/filter flag creates or
+        # moves a ref (`git branch scratch`, `git tag v1`); with one it is
+        # a pattern or commit to filter by. `-a` lists for branch but
+        # annotates (creates) for tag, so the listing set is per-command.
+        listing = ("--list", "--contains", "--no-contains", "--merged",
+                   "--no-merged", "--points-at", "--sort", "--format",
+                   "--column")
+        if any(t == "-l" or t.startswith(listing)
+               or (sub == "branch" and t in ("-a", "--all", "-r", "--remotes",
+                                             "-v", "-vv", "--verbose",
+                                             "--show-current"))
+               or (sub == "tag" and t.startswith("-n"))
+               for t in rest):
+            return False
+        return any(not t.startswith("-") for t in rest)
     flagged = CONDITIONAL_GIT.get(sub) or set()
     return any(t in flagged for t in rest)
 

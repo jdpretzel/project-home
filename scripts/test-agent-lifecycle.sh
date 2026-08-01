@@ -258,6 +258,21 @@ test_start_offline_base_skips_the_fetch() {
   assert_base_record "start --offline-base" "$wt" "$base" ""
 }
 
+test_start_offline_base_records_a_named_base_ref() {
+  new_fixture start-offline-base-ref
+  local base wt
+  base="$(git -C "$primary" rev-parse HEAD)"
+  break_remote
+
+  # An owner naming --base alongside --offline-base still means that branch as
+  # the publication target; the record must carry it (unvalidated — no fetch
+  # ran) so publish-check aims there instead of at the default branch.
+  run_lifecycle "$primary" start topic --offline-base "$base" --base integration
+  assert_status "start --offline-base --base integration" 0
+  wt="$(worktree_from_output "start --offline-base --base integration")"
+  assert_base_record "start --offline-base --base integration" "$wt" "$base" "integration"
+}
+
 test_start_refuses_an_existing_branch() {
   new_fixture start-existing-branch
   git -C "$primary" branch taken
@@ -269,6 +284,20 @@ test_start_refuses_an_existing_branch() {
   assert_output_has "start on an existing branch name" \
     "choose a new name or enter its existing worktree"
   assert_missing "start on an existing branch name" "$fixture/primary-worktrees/taken"
+}
+
+test_start_refuses_a_branch_already_on_the_remote() {
+  new_fixture start-remote-branch
+  create_remote_branch published >/dev/null
+
+  # No local 'published' branch exists, so only the remote ref can refuse it;
+  # missing this makes the eventual `git push origin HEAD` append the task to
+  # someone else's published branch, or fail only after the work is done.
+  run_lifecycle "$primary" start published
+  assert_nonzero "start on a branch name already on the remote"
+  assert_output_has "start on a branch name already on the remote" \
+    "'origin/published' already exists"
+  assert_missing "start on a branch name already on the remote" "$fixture/primary-worktrees/published"
 }
 
 test_start_base_ref_is_recorded_and_retargets_publish_check() {
@@ -564,6 +593,23 @@ $(cat "$GIT_TRACE_LOG")"
     fail "close on a pushed, clean worktree: branch 'topic' was deleted, expected it to be kept"
 }
 
+test_close_refuses_after_the_remote_branch_was_deleted() {
+  new_fixture close-remote-deleted
+  local wt
+  started_and_published topic
+
+  # The push landed once, but the remote no longer holds the branch; the stale
+  # remote-tracking ref must not vouch for HEAD, so close has to prune and
+  # refuse rather than delete the only remaining copy of the work.
+  git -C "$remote" update-ref -d refs/heads/topic
+
+  run_lifecycle "$primary" close "$wt"
+  assert_nonzero "close after the remote deleted the branch"
+  assert_output_has "close after the remote deleted the branch" \
+    "not reachable from any remote branch"
+  [ -d "$wt" ] || fail "close after the remote deleted the branch: worktree was removed"
+}
+
 test_close_of_a_detached_worktree_reports_success() {
   new_fixture close-detached
   local wt
@@ -634,6 +680,10 @@ test_guard_blocks_primary_checkout_mutation() {
     "$(json_bash "git commit -m wip" "$primary")"
   guard_case "git commit with cwd in a worktree" 0 \
     "$(json_bash "git commit -m wip" "$guard_wt")"
+  guard_case "git add with cwd in the primary checkout" 2 \
+    "$(json_bash "git add -A" "$primary")"
+  guard_case "git add with cwd in a worktree" 0 \
+    "$(json_bash "git add -A" "$guard_wt")"
   guard_case "git -C <primary> commit from outside either checkout" 2 \
     "$(json_bash "git -C $primary commit -m wip" "$TEST_ROOT")"
   guard_case "cd <primary> && git commit, from outside" 2 \
@@ -656,6 +706,10 @@ test_guard_allows_inspection_and_ignores_lookalikes() {
     "$(json_bash "git config --get user.name" "$primary")"
   guard_case "git reflog in the primary checkout" 0 \
     "$(json_bash "git reflog" "$primary")"
+  guard_case "git tag --list with a pattern in the primary checkout" 0 \
+    "$(json_bash "git tag -l v*" "$primary")"
+  guard_case "git branch --contains in the primary checkout" 0 \
+    "$(json_bash "git branch --contains HEAD" "$primary")"
   guard_case "a double-quoted string that merely mentions git commit" 0 \
     "$(json_bash "echo \\\"a && git commit\\\"" "$primary")"
   guard_case "a single-quoted string that mentions a piped git commit" 0 \
@@ -673,6 +727,12 @@ test_guard_blocks_history_and_repo_surgery() {
     "$(json_bash "git reflog expire --expire=now --all" "$primary")"
   guard_case "git gc in the primary checkout" 2 \
     "$(json_bash "git gc --prune=now" "$primary")"
+  guard_case "git branch <name> creating a ref in the primary checkout" 2 \
+    "$(json_bash "git branch scratch" "$primary")"
+  guard_case "git tag <name> creating a ref in the primary checkout" 2 \
+    "$(json_bash "git tag v1" "$primary")"
+  guard_case "git tag -f moving a tag in the primary checkout" 2 \
+    "$(json_bash "git tag -f v1 HEAD~1" "$primary")"
 }
 
 test_guard_push_matrix() {
@@ -687,6 +747,8 @@ test_guard_push_matrix() {
     "$(json_bash "git push origin :dead" "$guard_wt")"
   guard_case "git push --delete" 2 \
     "$(json_bash "git push origin --delete topic" "$guard_wt")"
+  guard_case "git push --prune" 2 \
+    "$(json_bash "git push --prune origin" "$guard_wt")"
   guard_case "plain git push" 0 \
     "$(json_bash "git push origin HEAD" "$guard_wt")"
   guard_case "plain git push with an explicit refspec" 0 \
@@ -713,6 +775,10 @@ test_guard_shell_writers() {
     "$(json_bash "cp $primary/README.md /tmp/x" "$TEST_ROOT")"
   guard_case "cp writing into the primary checkout" 2 \
     "$(json_bash "cp /tmp/x $primary/README.md" "$TEST_ROOT")"
+  guard_case "mv moving a file out of the primary checkout" 2 \
+    "$(json_bash "mv $primary/README.md /tmp/x" "$TEST_ROOT")"
+  guard_case "mv between outside paths from a primary cwd" 0 \
+    "$(json_bash "mv /tmp/a /tmp/b" "$primary")"
   # The macOS spelling carries an empty argument; it must neither hide the
   # path that follows it nor be mistaken for a path of its own.
   guard_case "sed -i over a file in the primary checkout" 2 \
@@ -762,7 +828,9 @@ test_guard_parses_a_quoted_path_with_spaces() {
 test_start_bases_on_fetched_remote_not_stale_local
 test_start_fails_closed_when_fetch_fails
 test_start_offline_base_skips_the_fetch
+test_start_offline_base_records_a_named_base_ref
 test_start_refuses_an_existing_branch
+test_start_refuses_a_branch_already_on_the_remote
 test_start_base_ref_is_recorded_and_retargets_publish_check
 test_publish_check_rejects_a_dirty_tree
 test_publish_check_stops_on_authority_paths
@@ -777,6 +845,7 @@ test_close_refuses_ignored_files_until_asked
 test_close_normalizes_the_worktree_path
 test_close_fails_closed_when_the_remote_is_unreachable
 test_close_removes_a_pushed_worktree_and_keeps_the_branch
+test_close_refuses_after_the_remote_branch_was_deleted
 test_close_of_a_detached_worktree_reports_success
 test_guard_blocks_primary_checkout_mutation
 test_guard_allows_inspection_and_ignores_lookalikes
