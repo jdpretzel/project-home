@@ -1,14 +1,11 @@
 Quickstart:
 
 ```bash
-npx skills add mattpocock/skills --skill=resolving-merge-conflicts
+claude plugin marketplace add jdpretzel/project-home
+claude plugin install project-home
 ```
 
-```bash
-npx skills update resolving-merge-conflicts
-```
-
-[Source](https://github.com/mattpocock/skills/tree/main/skills/engineering/resolving-merge-conflicts)
+[Source](https://github.com/jdpretzel/project-home/tree/main/skills/engineering/resolving-merge-conflicts)
 
 ## What it does
 

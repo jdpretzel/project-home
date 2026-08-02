@@ -1,14 +1,11 @@
 Quickstart:
 
 ```bash
-npx skills add mattpocock/skills --skill=handoff
+claude plugin marketplace add jdpretzel/project-home
+claude plugin install project-home
 ```
 
-```bash
-npx skills update handoff
-```
-
-[Source](https://github.com/mattpocock/skills/tree/main/skills/productivity/handoff)
+[Source](https://github.com/jdpretzel/project-home/tree/main/skills/productivity/handoff)
 
 ## What it does
 

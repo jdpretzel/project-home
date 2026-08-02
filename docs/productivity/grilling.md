@@ -1,14 +1,11 @@
 Quickstart:
 
 ```bash
-npx skills add mattpocock/skills --skill=grilling
+claude plugin marketplace add jdpretzel/project-home
+claude plugin install project-home
 ```
 
-```bash
-npx skills update grilling
-```
-
-[Source](https://github.com/mattpocock/skills/tree/main/skills/productivity/grilling)
+[Source](https://github.com/jdpretzel/project-home/tree/main/skills/productivity/grilling)
 
 ## What it does
 

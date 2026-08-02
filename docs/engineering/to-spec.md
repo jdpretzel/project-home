@@ -1,14 +1,11 @@
 Quickstart:
 
 ```bash
-npx skills add mattpocock/skills --skill=to-spec
+claude plugin marketplace add jdpretzel/project-home
+claude plugin install project-home
 ```
 
-```bash
-npx skills update to-spec
-```
-
-[Source](https://github.com/mattpocock/skills/tree/main/skills/engineering/to-spec)
+[Source](https://github.com/jdpretzel/project-home/tree/main/skills/engineering/to-spec)
 
 ## What it does
 

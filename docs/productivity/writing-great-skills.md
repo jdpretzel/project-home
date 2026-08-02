@@ -1,14 +1,11 @@
 Quickstart:
 
 ```bash
-npx skills add mattpocock/skills --skill=writing-great-skills
+claude plugin marketplace add jdpretzel/project-home
+claude plugin install project-home
 ```
 
-```bash
-npx skills update writing-great-skills
-```
-
-[Source](https://github.com/mattpocock/skills/tree/main/skills/productivity/writing-great-skills)
+[Source](https://github.com/jdpretzel/project-home/tree/main/skills/productivity/writing-great-skills)
 
 ## What it does
 
