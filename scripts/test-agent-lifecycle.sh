@@ -778,22 +778,14 @@ test_guard_blocks_primary_checkout_mutation() {
     "$(json_bash "git add -A" "$primary")"
   guard_case "git add with cwd in a worktree" 0 \
     "$(json_bash "git add -A" "$guard_wt")"
-  guard_case "git -C <primary> commit from outside either checkout" 2 \
-    "$(json_bash "git -C $primary commit -m wip" "$TEST_ROOT")"
-  guard_case "cd <primary> && git commit, from outside" 2 \
-    "$(json_bash "cd $primary && git commit -m wip" "$TEST_ROOT")"
-  guard_case "cd <primary>; git commit, from outside" 2 \
-    "$(json_bash "cd $primary; git commit -m wip" "$TEST_ROOT")"
   guard_case "git -c <config> commit in the primary checkout" 2 \
     "$(json_bash "git -c user.email=a@b commit -m wip" "$primary")"
-  guard_case "git --git-dir/--work-tree pointed at the primary checkout" 2 \
-    "$(json_bash "git --git-dir=$primary/.git --work-tree=$primary commit -m wip" "$TEST_ROOT")"
-  # Git's repository-selection environment variables re-target the command
-  # just like the flags do.
-  guard_case "GIT_DIR/GIT_WORK_TREE prefix pointed at the primary" 2 \
-    "$(json_bash "GIT_DIR=$primary/.git GIT_WORK_TREE=$primary git reset --hard HEAD" "$TEST_ROOT")"
-  guard_case "a harmless env prefix on an inspection command" 0 \
-    "$(json_bash "GIT_PAGER=cat git log -1" "$primary")"
+  guard_case "git checkout in the primary checkout" 2 \
+    "$(json_bash "git checkout -b scratch" "$primary")"
+  guard_case "git commit with quoted arguments in the primary checkout" 2 \
+    "$(json_bash "git commit -m 'a b'" "$primary")"
+  guard_case "git gc in the primary checkout" 2 \
+    "$(json_bash "git gc --prune=now" "$primary")"
 }
 
 test_guard_allows_inspection_and_ignores_lookalikes() {
@@ -808,136 +800,27 @@ test_guard_allows_inspection_and_ignores_lookalikes() {
     "$(json_bash "git reflog" "$primary")"
   guard_case "git tag --list with a pattern in the primary checkout" 0 \
     "$(json_bash "git tag -l v*" "$primary")"
-  guard_case "git branch --contains in the primary checkout" 0 \
-    "$(json_bash "git branch --contains HEAD" "$primary")"
+  guard_case "git log piped to head in the primary checkout" 0 \
+    "$(json_bash "git log --oneline | head -5" "$primary")"
+  guard_case "a harmless env prefix on an inspection command" 0 \
+    "$(json_bash "GIT_PAGER=cat git log -1" "$primary")"
   guard_case "a double-quoted string that merely mentions git commit" 0 \
     "$(json_bash "echo \\\"a && git commit\\\"" "$primary")"
   guard_case "a single-quoted string that mentions a piped git commit" 0 \
     "$(json_bash "echo 'harmless | git commit -m wip'" "$primary")"
+  guard_case "unbalanced quotes fail open" 0 \
+    "$(json_bash "echo 'oops" "$primary")"
   guard_case "unparseable stdin" 0 "not json at all"
-}
-
-test_guard_blocks_shared_state_and_recovery_surgery() {
-  guard_fixture
-  guard_case "git config <name> <value> in the primary checkout" 2 \
-    "$(json_bash "git config user.name x" "$primary")"
-  guard_case "git remote set-url in the primary checkout" 2 \
-    "$(json_bash "git remote set-url origin /elsewhere" "$primary")"
-  # The reflog and gc are the recovery net that makes the guard's
-  # deliberate fail-opens acceptable; destroying it is never a fail-open.
-  guard_case "git reflog expire in the primary checkout" 2 \
-    "$(json_bash "git reflog expire --expire=now --all" "$primary")"
-  guard_case "git gc in the primary checkout" 2 \
-    "$(json_bash "git gc --prune=now" "$primary")"
-}
-
-test_guard_push_matrix() {
-  guard_fixture
-  guard_case "git push --force" 2 \
-    "$(json_bash "git push --force origin topic" "$guard_wt")"
-  guard_case "git push with a bundled -f flag" 2 \
-    "$(json_bash "git push -qf origin main" "$guard_wt")"
-  guard_case "git push with a + force refspec" 2 \
-    "$(json_bash "git push origin +main:main" "$guard_wt")"
-  guard_case "git push with a deleting refspec" 2 \
-    "$(json_bash "git push origin :dead" "$guard_wt")"
-  guard_case "git push --delete" 2 \
-    "$(json_bash "git push origin --delete topic" "$guard_wt")"
-  guard_case "git push --prune" 2 \
-    "$(json_bash "git push --prune origin" "$guard_wt")"
-  guard_case "plain git push" 0 \
-    "$(json_bash "git push origin HEAD" "$guard_wt")"
-  guard_case "plain git push with an explicit refspec" 0 \
-    "$(json_bash "git push origin HEAD:refs/heads/x" "$guard_wt")"
-  # An ordinary refspec landing on the remote default branch is still an
-  # owner action, in every spelling.
-  guard_case "git push HEAD:main targeting the default branch" 2 \
-    "$(json_bash "git push origin HEAD:main" "$guard_wt")"
-  guard_case "git push naming the default branch as the refspec" 2 \
-    "$(json_bash "git push origin main" "$guard_wt")"
-  guard_case "git push with a refs/heads/ default-branch destination" 2 \
-    "$(json_bash "git push origin HEAD:refs/heads/main" "$guard_wt")"
-  guard_case "git push -o value not mistaken for the remote positional" 0 \
-    "$(json_bash "git push -o ci.skip origin HEAD:feature" "$guard_wt")"
-  # The publication contract: exactly one ordinary topic branch, no tags.
-  guard_case "git push --all" 2 \
-    "$(json_bash "git push --all origin" "$guard_wt")"
-  guard_case "git push --tags" 2 \
-    "$(json_bash "git push origin --tags" "$guard_wt")"
-  guard_case "git push --follow-tags" 2 \
-    "$(json_bash "git push --follow-tags origin HEAD" "$guard_wt")"
-  guard_case "git push with a refs/tags destination" 2 \
-    "$(json_bash "git push origin refs/tags/v1" "$guard_wt")"
-  guard_case "git push with two refspecs" 2 \
-    "$(json_bash "git push origin HEAD:alpha HEAD:beta" "$guard_wt")"
-  # --repo supplies the repository, leaving every positional a refspec.
-  guard_case "git push --repo targeting the default branch" 2 \
-    "$(json_bash "git push --repo=origin main" "$guard_wt")"
-  guard_case "git push --repo with two refspecs" 2 \
-    "$(json_bash "git push --repo origin HEAD:alpha HEAD:beta" "$guard_wt")"
-  guard_case "git push --repo with one topic refspec" 0 \
-    "$(json_bash "git push --repo=origin HEAD:feature" "$guard_wt")"
-  guard_case "git push with an unqualified topic refspec" 0 \
-    "$(json_bash "git push origin sometopic" "$guard_wt")"
-}
-
-test_guard_shared_state_from_worktrees() {
-  guard_fixture
-  # Linked worktrees share the primary's .git/config and refs; writing them
-  # from a worktree is primary mutation in another coat.
-  guard_case "git config write from a worktree" 2 \
-    "$(json_bash "git config core.hooksPath /tmp/hooks" "$guard_wt")"
-  guard_case "git remote set-url from a worktree" 2 \
-    "$(json_bash "git remote set-url origin /elsewhere" "$guard_wt")"
-  guard_case "git config --worktree write from a worktree" 0 \
-    "$(json_bash "git config --worktree foo.bar x" "$guard_wt")"
-  guard_case "git config --get from a worktree" 0 \
-    "$(json_bash "git config --get user.name" "$guard_wt")"
-  guard_case "git remote -v from a worktree" 0 \
-    "$(json_bash "git remote -v" "$guard_wt")"
-}
-
-test_guard_worktree_rules() {
-  guard_fixture
-  guard_case "git worktree remove --force" 2 \
-    "$(json_bash "git worktree remove --force $guard_wt" "$TEST_ROOT")"
-  # Unforced removal is no safer: it skips close's loss proofs and still
-  # deletes ignored files.
-  guard_case "git worktree remove without --force" 2 \
-    "$(json_bash "git worktree remove $guard_wt" "$TEST_ROOT")"
-  guard_case "git worktree add without an explicit base" 2 \
-    "$(json_bash "git worktree add ../x" "$TEST_ROOT")"
-  guard_case "git worktree add with an explicit base" 0 \
-    "$(json_bash "git worktree add ../x origin/main" "$TEST_ROOT")"
-}
-
-test_guard_directory_tracking_and_runners() {
-  guard_fixture
-  # A cd that will fail at runtime leaves the shell — and so the guard's
-  # effective directory — where it was.
-  guard_case "cd to a missing dir keeps the primary cwd" 2 \
-    "$(json_bash "cd /definitely-not-here-xyz; git commit -m wip" "$primary")"
-  guard_case "mkdir && cd into the new dir leaves the primary" 0 \
-    "$(json_bash "mkdir -p /tmp/guard-fresh-dir && cd /tmp/guard-fresh-dir && git commit -m wip" "$primary")"
-  # Bare runner words execute their trailing arguments as the real command.
-  guard_case "command git commit in the primary checkout" 2 \
-    "$(json_bash "command git commit -m wip" "$primary")"
-  guard_case "nohup git commit in the primary checkout" 2 \
-    "$(json_bash "nohup git commit -m wip" "$primary")"
-  guard_case "command -- terminator before the real command" 2 \
-    "$(json_bash "command -- git commit -m wip" "$primary")"
-  guard_case "command -v is describe-only" 0 \
-    "$(json_bash "command -v git" "$primary")"
 }
 
 test_guard_deliberate_fail_opens() {
   guard_fixture
-  # Each of these was once denied by command-pattern analysis that grew
-  # toward a partial shell interpreter; the coverage was deleted
-  # deliberately (ADR 0004). The damage each represents is local and
-  # recoverable — from the remote, the reflog, and plain `git status`
-  # visibility — and these cases pin the deletion as a decision, not an
-  # accident. The payloads only pass through the guard; nothing runs.
+  # ADR 0004's shell interpretation was retired by ADR 0005 after its first
+  # production use produced both a wrong block and a bypass. Each case below
+  # was once denied (or analyzed) by that machinery; these pins record the
+  # retirement as a decision, not an accident. The payloads only pass
+  # through the guard; nothing runs. What still holds the line: worktree
+  # isolation, close's loss proofs, GitHub's ruleset, and PR review.
   guard_case "a plain shell write into the primary (accepted fail-open)" 0 \
     "$(json_bash "rm f.txt" "$primary")"
   guard_case "a redirection into the primary (accepted fail-open)" 0 \
@@ -946,6 +829,41 @@ test_guard_deliberate_fail_opens() {
     "$(json_bash "git branch scratch" "$primary")"
   guard_case "a fetch writing a local branch (accepted fail-open)" 0 \
     "$(json_bash "git fetch origin main:scratch" "$guard_wt")"
+  # Retired: -C/--git-dir/environment/cd/runner tracking. A command that
+  # names its own repository fails open — resolving where it operates is
+  # the interpretation ADR 0005 removed.
+  guard_case "git -C <primary> commit from outside (retired: -C tracking)" 0 \
+    "$(json_bash "git -C $primary commit -m wip" "$TEST_ROOT")"
+  guard_case "cd <primary> && git commit from outside (retired: cd tracking)" 0 \
+    "$(json_bash "cd $primary && git commit -m wip" "$TEST_ROOT")"
+  guard_case "GIT_DIR prefix at the primary (retired: env tracking)" 0 \
+    "$(json_bash "GIT_DIR=$primary/.git GIT_WORK_TREE=$primary git reset --hard HEAD" "$TEST_ROOT")"
+  guard_case "command git commit in the primary (retired: runner peeling)" 0 \
+    "$(json_bash "command git commit -m wip" "$primary")"
+  # Retired: all push analysis. GitHub's ruleset is the push authority; the
+  # 2>&1 case is the production wrong block that triggered ADR 0005.
+  guard_case "a plain push with a redirection (the production wrong block)" 0 \
+    "$(json_bash "git push origin HEAD 2>&1" "$guard_wt")"
+  guard_case "git push --force (retired: push analysis)" 0 \
+    "$(json_bash "git push --force origin topic" "$guard_wt")"
+  guard_case "git push naming the default branch (retired: push analysis)" 0 \
+    "$(json_bash "git push origin main" "$guard_wt")"
+  guard_case "git push --tags (retired: push analysis)" 0 \
+    "$(json_bash "git push origin --tags" "$guard_wt")"
+  # Retired: shared-state and recovery-surgery rules.
+  guard_case "git config write in the primary (retired: shared-state rules)" 0 \
+    "$(json_bash "git config user.name x" "$primary")"
+  guard_case "git remote set-url from a worktree (retired: shared-state rules)" 0 \
+    "$(json_bash "git remote set-url origin /elsewhere" "$guard_wt")"
+  guard_case "git reflog expire in the primary (retired: recovery-surgery rules)" 0 \
+    "$(json_bash "git reflog expire --expire=now --all" "$primary")"
+  # Retired: worktree rules. close stays the recommended remover — as a
+  # helper: Git itself refuses to remove a dirty worktree unforced, and
+  # forced removal is prohibited in guidance, not by this gate.
+  guard_case "git worktree remove (retired: worktree rules)" 0 \
+    "$(json_bash "git worktree remove $guard_wt" "$TEST_ROOT")"
+  guard_case "git worktree add without an explicit base (retired: worktree rules)" 0 \
+    "$(json_bash "git worktree add ../x" "$TEST_ROOT")"
 }
 
 test_guard_apply_patch() {
@@ -958,28 +876,14 @@ test_guard_apply_patch() {
     "$(json_apply_patch "no headers here" "$primary")"
 }
 
-test_guard_escape_hatch_is_scoped_to_the_primary_rules() {
+test_guard_escape_hatch_lifts_the_gate() {
   guard_fixture
   export AGENT_LIFECYCLE_ALLOW_PRIMARY=1
   guard_case "escape hatch, Edit in the primary checkout" 0 \
     "$(json_file_tool Edit "$primary/README.md" "$primary")"
   guard_case "escape hatch, git commit in the primary checkout" 0 \
     "$(json_bash "git commit -m wip" "$primary")"
-  # The hatch lifts the primary-checkout rules only; rewriting published history
-  # or destroying unpushed work is not the owner's to wave through inline.
-  guard_case "escape hatch does not permit a force push" 2 \
-    "$(json_bash "git push --force origin main" "$guard_wt")"
-  guard_case "escape hatch does not permit a forced worktree removal" 2 \
-    "$(json_bash "git worktree remove -f $guard_wt" "$TEST_ROOT")"
   unset AGENT_LIFECYCLE_ALLOW_PRIMARY
-}
-
-test_guard_parses_a_quoted_path_with_spaces() {
-  new_fixture "guard spaces"
-  guard_case "git -C '<primary with spaces>' commit" 2 \
-    "$(json_bash "git -C '$primary' commit -m wip" "$TEST_ROOT")"
-  guard_case "git -C '<primary with spaces>' status" 0 \
-    "$(json_bash "git -C '$primary' status" "$TEST_ROOT")"
 }
 
 test_start_bases_on_fetched_remote_not_stale_local
@@ -1011,14 +915,8 @@ test_close_ignores_other_remotes_tracking_refs
 test_close_of_a_detached_worktree_reports_success
 test_guard_blocks_primary_checkout_mutation
 test_guard_allows_inspection_and_ignores_lookalikes
-test_guard_blocks_shared_state_and_recovery_surgery
-test_guard_push_matrix
-test_guard_shared_state_from_worktrees
-test_guard_worktree_rules
-test_guard_directory_tracking_and_runners
 test_guard_deliberate_fail_opens
 test_guard_apply_patch
-test_guard_escape_hatch_is_scoped_to_the_primary_rules
-test_guard_parses_a_quoted_path_with_spaces
+test_guard_escape_hatch_lifts_the_gate
 
 echo "agent-lifecycle tests passed"

@@ -4,7 +4,12 @@ Date: 2026-07-31
 
 ## Status
 
-Accepted.
+Accepted. Amended by
+[ADR 0005](./0005-retire-the-guards-shell-interpretation.md) (2026-08-06):
+the guard's six denial classes are reduced to a thin primary-checkout
+gate after production use produced both a wrong block and a bypass;
+`start`, `publish-check`, `close`, the publication contract, and the
+GitHub ruleset stand unchanged.
 
 ## Context
 
