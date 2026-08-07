@@ -1,14 +1,11 @@
 Quickstart:
 
 ```bash
-npx skills add mattpocock/skills --skill=domain-modeling
+claude plugin marketplace add jdpretzel/project-home
+claude plugin install project-home
 ```
 
-```bash
-npx skills update domain-modeling
-```
-
-[Source](https://github.com/mattpocock/skills/tree/main/skills/engineering/domain-modeling)
+[Source](https://github.com/jdpretzel/project-home/tree/main/skills/engineering/domain-modeling)
 
 ## What it does
 

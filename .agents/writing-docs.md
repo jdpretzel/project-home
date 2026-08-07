@@ -6,7 +6,7 @@ Most of these skills are **user-invoked**: the agent will never fire them for yo
 
 Act whenever a promoted skill is added, renamed, or has its behaviour changed: create or re-sync its docs page. A rename moves the file too (`docs/<bucket>/<old>.md` → `docs/<bucket>/<new>.md`), because the published URL tracks the name; a skill that moves between `engineering/` and `productivity/` moves its docs file to the matching folder. Skills in `misc/`, `personal/`, `in-progress/`, and `deprecated/` get no page — none of those buckets is promoted. A skill moving *out* of one of them into `engineering/` or `productivity/` gains a page; one moving the other way loses it.
 
-Because these pages are published on `aihero.dev`, **every link is absolute** — never a repo-relative path. A link to another skill points at `https://aihero.dev/skills-<name>`; a link into the repo points at its full `https://github.com/mattpocock/skills/...` URL. A relative link that works in the repo breaks once published.
+Because these pages are published on `aihero.dev`, **every link is absolute** — never a repo-relative path. A link to another skill points at `https://aihero.dev/skills-<name>`; a link into the repo points at its full `https://github.com/jdpretzel/project-home/...` URL — this fork's, never upstream's: the pages document this fork's behaviour, and upstream attribution lives in the LICENSE and the fork-anchor records, not in per-page links (issue #19). A relative link that works in the repo breaks once published.
 
 There is no H1 — the published page takes its title from the slug.
 
@@ -19,14 +19,13 @@ Fill the template below. The **fixed frame** (Quickstart block, source link, `##
 Quickstart:
 
 ```bash
-npx skills add mattpocock/skills --skill=<name>
+claude plugin marketplace add jdpretzel/project-home
+claude plugin install project-home
 ```
 
-```bash
-npx skills update <name>
-```
+[Source](https://github.com/jdpretzel/project-home/tree/main/skills/<bucket>/<name>)
 
-[Source](https://github.com/mattpocock/skills/tree/main/skills/<bucket>/<name>)
+The Quickstart block is **fixed text** — exactly these two plugin commands, identical on every page. The plugin is the fork's only supported install path (`npx skills add` was deliberately dropped; ADR 0002), and it is version-less, so there is no per-skill install or update command to vary. Only the `[Source]` link changes per page, and it always points into this fork.
 
 ## What it does
 
@@ -72,7 +71,7 @@ Always present. Situate the skill in the system in a sentence or two:
 ## Done when
 
 - The page exists at `docs/<bucket>/<name>.md`, and no stale page survives a rename or bucket move.
-- The Quickstart block and source link name the correct bucket and skill; the update line names the skill.
+- The Quickstart block is the fixed two-line plugin install, and the `[Source]` link names this fork with the correct bucket and skill.
 - `## What it does` states the defining constraint, as plain prose rather than a labelled aside.
 - `## When to reach for it` states invocation mode and the trigger boundary.
 - `## Where it fits` names the role and links to `ask-matt`.
