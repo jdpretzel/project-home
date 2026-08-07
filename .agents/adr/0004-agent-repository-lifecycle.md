@@ -72,7 +72,13 @@ One lifecycle, three layers, one owner per fact:
   blocking, so the hard gate lives at `PreToolUse`) and
   `scripts/agent-lifecycle-guard.py` on `PreToolUse` (exit 2 blocks in both;
   the registrations fail closed when `python3` is missing rather than
-  silently disarming). The guard is a small footgun catch, not a command
+  silently disarming). *(Historical — superseded by
+  [ADR 0005](./0005-retire-the-guards-shell-interpretation.md),
+  2026-08-06: of the denial classes below, only the primary-checkout
+  class survives, as a location gate without the `-C`/environment/`cd`/
+  runner tracking, and the test groups cited below were deleted with the
+  rest. The passage stands unrewritten as the design this ADR
+  accepted.)* The guard is a small footgun catch, not a command
   interpreter: it denies only operations that are both consequential and
   reliably detectable at the git-verb level. The denied set — file edits
   and mutating git verbs against the primary checkout, including via
@@ -155,7 +161,13 @@ registrations share one guard with no translation layer. Known coverage gaps, re
   `$CLAUDE_PROJECT_DIR`.
 - Hooks see model tool calls, not native app/hosted operations, and the
   matchers do not cover MCP tools that can mutate GitHub state.
-- The guard deliberately fails open on everything outside its six denial
+- *(Historical — superseded by
+  [ADR 0005](./0005-retire-the-guards-shell-interpretation.md): the
+  fail-open surface is now everything outside the thin primary gate; the
+  recovery-path denials this passage closes on — `reflog expire`/`gc`
+  and the push rules, with their cited test groups — were retired, and
+  the push line is held by GitHub's ruleset and owner review instead.)*
+  The guard deliberately fails open on everything outside its six denial
   classes — a miss must be an allow, never a wrong block, and partial
   coverage of arbitrary shell is worse than its honest absence. An earlier
   revision grew, under review pressure, toward a partial shell-command

@@ -860,8 +860,10 @@ test_guard_deliberate_fail_opens() {
   # Retired: worktree rules. close stays the recommended remover — as a
   # helper: Git itself refuses to remove a dirty worktree unforced, and
   # forced removal is prohibited in guidance, not by this gate.
-  guard_case "git worktree remove (retired: worktree rules)" 0 \
-    "$(json_bash "git worktree remove $guard_wt" "$TEST_ROOT")"
+  guard_case "git worktree remove from the primary cwd (retired: worktree rules)" 0 \
+    "$(json_bash "git worktree remove $guard_wt" "$primary")"
+  guard_case "git worktree remove --force from the primary cwd (guidance-only prohibition)" 0 \
+    "$(json_bash "git worktree remove --force $guard_wt" "$primary")"
   guard_case "git worktree add without an explicit base (retired: worktree rules)" 0 \
     "$(json_bash "git worktree add ../x" "$TEST_ROOT")"
 }
